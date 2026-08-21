@@ -3,6 +3,12 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Workout } from '../types'
 
+type CardioEntry = {
+  name: string
+  minutes: string
+  skipped: boolean
+}
+
 type SetType = 'working' | 'warmup' | 'drop' | 'partial'
 
 type Drop = {
@@ -58,6 +64,7 @@ function Session() {
   const { id } = useParams()
   const [workout, setWorkout] = useState<Workout | null>(null)
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([])
+  const [cardioLogs, setCardioLogs] = useState<CardioEntry[]>([])
   const [lastTime, setLastTime] = useState<Record<string, LastTimeSet[]>>({})
   const [todaySessionId, setTodaySessionId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -70,7 +77,7 @@ function Session() {
   async function load() {
     const { data: workoutData } = await supabase
       .from('workouts')
-      .select('*, workout_exercises(*)')
+      .select('*, workout_exercises(*), workout_cardio(*)')
       .eq('id', id)
       .single()
 
@@ -79,7 +86,8 @@ function Session() {
     const sortedExercises = [...workoutData.workout_exercises].sort(
       (a, b) => a.position - b.position,
     )
-    setWorkout({ ...workoutData, workout_exercises: sortedExercises })
+    const sortedCardio = [...workoutData.workout_cardio].sort((a, b) => a.position - b.position)
+    setWorkout({ ...workoutData, workout_exercises: sortedExercises, workout_cardio: sortedCardio })
 
     const { data: recentSessions } = await supabase
       .from('sessions')
@@ -158,6 +166,22 @@ function Session() {
           }
         }),
       )
+
+      const { data: todayCardio } = await supabase
+        .from('session_cardio')
+        .select('*')
+        .eq('session_id', todaySession.id)
+
+      setCardioLogs(
+        sortedCardio.map((c) => {
+          const saved = (todayCardio ?? []).find((tc) => tc.name === c.name)
+          return {
+            name: c.name,
+            minutes: saved && saved.minutes != null ? String(saved.minutes) : '',
+            skipped: saved?.skipped ?? false,
+          }
+        }),
+      )
     } else {
       setExerciseLogs(
         sortedExercises.map((ex) => {
@@ -174,7 +198,21 @@ function Session() {
           }
         }),
       )
+
+      setCardioLogs(
+        sortedCardio.map((c) => ({ name: c.name, minutes: '', skipped: false })),
+      )
     }
+  }
+
+  function updateCardio(index: number, changes: Partial<CardioEntry>) {
+    setCardioLogs((logs) => logs.map((c, i) => (i === index ? { ...c, ...changes } : c)))
+  }
+
+  function toggleCardioSkip(index: number) {
+    setCardioLogs((logs) =>
+      logs.map((c, i) => (i === index ? { ...c, skipped: !c.skipped } : c)),
+    )
   }
 
   function updateSet(exIndex: number, setIndex: number, changes: Partial<SetEntry>) {
@@ -283,6 +321,7 @@ function Session() {
 
     if (sessionId) {
       await supabase.from('session_sets').delete().eq('session_id', sessionId)
+      await supabase.from('session_cardio').delete().eq('session_id', sessionId)
       await supabase
         .from('sessions')
         .update({ performed_at: new Date().toISOString() })
@@ -340,6 +379,18 @@ function Session() {
       if (dropRows.length > 0) {
         await supabase.from('drop_sets').insert(dropRows)
       }
+    }
+
+    const cardioToSave = cardioLogs.filter((c) => c.skipped || c.minutes !== '')
+    if (cardioToSave.length > 0) {
+      await supabase.from('session_cardio').insert(
+        cardioToSave.map((c) => ({
+          session_id: sessionId,
+          name: c.name,
+          minutes: c.skipped || c.minutes === '' ? null : Number(c.minutes),
+          skipped: c.skipped,
+        })),
+      )
     }
 
     setSaving(false)
@@ -504,6 +555,35 @@ function Session() {
           >
             + Add set
           </button>
+        </div>
+      ))}
+
+      {cardioLogs.map((c, index) => (
+        <div
+          key={c.name}
+          className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3"
+        >
+          <h2 className="font-semibold">{c.name}</h2>
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="number"
+              placeholder="Minutes"
+              value={c.minutes}
+              disabled={c.skipped}
+              onChange={(e) => updateCardio(index, { minutes: e.target.value })}
+              className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
+            />
+            <button
+              onClick={() => toggleCardioSkip(index)}
+              className={`shrink-0 text-xs px-2 py-2 rounded-lg transition-colors ${
+                c.skipped
+                  ? 'bg-neutral-700 text-neutral-200'
+                  : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+              }`}
+            >
+              Skip
+            </button>
+          </div>
         </div>
       ))}
 

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import type { Exercise, Workout } from '../types'
+import type { Cardio, Exercise, Workout } from '../types'
 import ActivityCalendar from '../components/ActivityCalendar'
-import BodyWeightTracker from '../components/BodyWeightTracker'
 
 function Home() {
   const [workouts, setWorkouts] = useState<Workout[]>([])
@@ -11,6 +10,7 @@ function Home() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [exercises, setExercises] = useState<Exercise[]>([])
+  const [cardio, setCardio] = useState<Cardio[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
@@ -20,7 +20,7 @@ function Home() {
   async function loadWorkouts() {
     const { data } = await supabase
       .from('workouts')
-      .select('*, workout_exercises(*)')
+      .select('*, workout_exercises(*), workout_cardio(*)')
       .order('created_at', { ascending: true })
 
     if (data) setWorkouts(data as Workout[])
@@ -30,6 +30,7 @@ function Home() {
     setEditingId(null)
     setName('')
     setExercises([])
+    setCardio([])
     setConfirmDelete(false)
     setIsOpen(true)
   }
@@ -38,6 +39,7 @@ function Home() {
     setEditingId(workout.id)
     setName(workout.name)
     setExercises(workout.workout_exercises)
+    setCardio(workout.workout_cardio)
     setConfirmDelete(false)
     setIsOpen(true)
   }
@@ -52,6 +54,18 @@ function Home() {
 
   function removeExercise(id: string) {
     setExercises(exercises.filter((ex) => ex.id !== id))
+  }
+
+  function addCardioRow() {
+    setCardio([...cardio, { id: crypto.randomUUID(), name: '', minutes: 20, position: 0 }])
+  }
+
+  function updateCardio(id: string, changes: Partial<Cardio>) {
+    setCardio(cardio.map((c) => (c.id === id ? { ...c, ...changes } : c)))
+  }
+
+  function removeCardio(id: string) {
+    setCardio(cardio.filter((c) => c.id !== id))
   }
 
   async function handleSave() {
@@ -70,6 +84,7 @@ function Home() {
     } else {
       await supabase.from('workouts').update({ name }).eq('id', workoutId)
       await supabase.from('workout_exercises').delete().eq('workout_id', workoutId)
+      await supabase.from('workout_cardio').delete().eq('workout_id', workoutId)
     }
 
     const validExercises = exercises.filter((ex) => ex.name.trim())
@@ -79,6 +94,18 @@ function Home() {
           workout_id: workoutId,
           name: ex.name.trim().toUpperCase(),
           sets: ex.sets,
+          position: index,
+        })),
+      )
+    }
+
+    const validCardio = cardio.filter((c) => c.name.trim())
+    if (validCardio.length > 0) {
+      await supabase.from('workout_cardio').insert(
+        validCardio.map((c, index) => ({
+          workout_id: workoutId,
+          name: c.name.trim().toUpperCase(),
+          minutes: c.minutes,
           position: index,
         })),
       )
@@ -109,7 +136,20 @@ function Home() {
 
       <ActivityCalendar />
 
-      <BodyWeightTracker />
+      <div className="w-full max-w-sm flex gap-2">
+        <Link
+          to="/weight"
+          className="flex-1 text-center py-2 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 transition-colors text-sm"
+        >
+          Body weight
+        </Link>
+        <Link
+          to="/progress"
+          className="flex-1 text-center py-2 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 transition-colors text-sm"
+        >
+          Progress
+        </Link>
+      </div>
 
       <ul className="w-full max-w-sm flex flex-col gap-2">
         {workouts.map((w) => (
@@ -122,6 +162,8 @@ function Home() {
               <div className="text-sm text-neutral-400">
                 {w.workout_exercises.length} exercise
                 {w.workout_exercises.length !== 1 && 's'}
+                {w.workout_cardio.length > 0 &&
+                  `, ${w.workout_cardio.length} cardio`}
               </div>
             </Link>
             <button
@@ -170,6 +212,9 @@ function Home() {
             />
 
             <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                Exercises
+              </h3>
               {exercises.map((ex) => (
                 <div key={ex.id} className="flex gap-2 items-center">
                   <input
@@ -200,6 +245,44 @@ function Home() {
                 className="py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors text-sm"
               >
                 + Add exercise
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                Cardio
+              </h3>
+              {cardio.map((c) => (
+                <div key={c.id} className="flex gap-2 items-center">
+                  <input
+                    value={c.name}
+                    onChange={(e) => updateCardio(c.id, { name: e.target.value.toUpperCase() })}
+                    placeholder="Cardio (e.g. Treadmill)"
+                    className="bg-neutral-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={c.minutes}
+                    onChange={(e) => updateCardio(c.id, { minutes: Number(e.target.value) })}
+                    className="bg-neutral-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 w-16"
+                  />
+                  <span className="text-xs text-neutral-500 shrink-0">min</span>
+                  <button
+                    onClick={() => removeCardio(c.id)}
+                    aria-label="Remove cardio"
+                    className="text-neutral-400 hover:text-neutral-200 text-xl leading-none px-1"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+
+              <button
+                onClick={addCardioRow}
+                className="py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors text-sm"
+              >
+                + Add cardio
               </button>
             </div>
 
