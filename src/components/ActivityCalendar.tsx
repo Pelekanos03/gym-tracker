@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 type DayActivity = {
@@ -49,9 +49,16 @@ function ActivityCalendar() {
   const [activity, setActivity] = useState<Record<string, DayActivity>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [weeks] = useState(buildWeeks)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     load()
+  }, [])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+    }
   }, [])
 
   async function load() {
@@ -89,7 +96,7 @@ function ActivityCalendar() {
     <div className="w-full max-w-sm">
       <h2 className="text-sm font-semibold text-neutral-300 mb-2">Activity</h2>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" ref={scrollRef}>
         <div className="inline-flex gap-[3px]">
           <div className="flex flex-col gap-[3px] text-[10px] text-neutral-500 w-7 pr-1 pt-[14px]">
             <div className="h-[11px]" />
