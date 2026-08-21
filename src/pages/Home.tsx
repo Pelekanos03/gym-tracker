@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Exercise, Workout } from '../types'
 import ActivityCalendar from '../components/ActivityCalendar'
+import BodyWeightTracker from '../components/BodyWeightTracker'
 
 function Home() {
   const [workouts, setWorkouts] = useState<Workout[]>([])
@@ -76,7 +77,7 @@ function Home() {
       await supabase.from('workout_exercises').insert(
         validExercises.map((ex, index) => ({
           workout_id: workoutId,
-          name: ex.name,
+          name: ex.name.trim().toUpperCase(),
           sets: ex.sets,
           position: index,
         })),
@@ -99,6 +100,8 @@ function Home() {
       <h1 className="text-3xl font-bold">Gym Tracker</h1>
 
       <ActivityCalendar />
+
+      <BodyWeightTracker />
 
       <ul className="w-full max-w-sm flex flex-col gap-2">
         {workouts.map((w) => (
@@ -163,7 +166,7 @@ function Home() {
                 <div key={ex.id} className="flex gap-2 items-center">
                   <input
                     value={ex.name}
-                    onChange={(e) => updateExercise(ex.id, { name: e.target.value })}
+                    onChange={(e) => updateExercise(ex.id, { name: e.target.value.toUpperCase() })}
                     placeholder="Exercise name"
                     className="bg-neutral-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1"
                   />
