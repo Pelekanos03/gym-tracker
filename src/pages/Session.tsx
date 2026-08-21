@@ -44,11 +44,22 @@ function newSet(setNumber: number): SetEntry {
   }
 }
 
+function isToday(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
 function Session() {
   const { id } = useParams()
   const [workout, setWorkout] = useState<Workout | null>(null)
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([])
   const [lastTime, setLastTime] = useState<Record<string, LastTimeSet[]>>({})
+  const [todaySessionId, setTodaySessionId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -70,47 +81,100 @@ function Session() {
     )
     setWorkout({ ...workoutData, workout_exercises: sortedExercises })
 
-    const { data: lastSession } = await supabase
+    const { data: recentSessions } = await supabase
       .from('sessions')
-      .select('id')
+      .select('id, performed_at')
       .eq('workout_id', id)
       .order('performed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(2)
 
-    let grouped: Record<string, LastTimeSet[]> = {}
+    const todaySession =
+      recentSessions && recentSessions.length > 0 && isToday(recentSessions[0].performed_at)
+        ? recentSessions[0]
+        : null
+    const referenceSession = todaySession ? (recentSessions?.[1] ?? null) : (recentSessions?.[0] ?? null)
 
-    if (lastSession) {
-      const { data: lastSets } = await supabase
+    setTodaySessionId(todaySession?.id ?? null)
+
+    const referenceGrouped: Record<string, LastTimeSet[]> = {}
+    if (referenceSession) {
+      const { data: refSets } = await supabase
         .from('session_sets')
         .select('*')
-        .eq('session_id', lastSession.id)
+        .eq('session_id', referenceSession.id)
 
-      if (lastSets) {
-        for (const s of lastSets) {
-          if (!grouped[s.exercise_name]) grouped[s.exercise_name] = []
-          grouped[s.exercise_name].push(s)
-        }
-        setLastTime(grouped)
+      for (const s of refSets ?? []) {
+        if (!referenceGrouped[s.exercise_name]) referenceGrouped[s.exercise_name] = []
+        referenceGrouped[s.exercise_name].push(s)
       }
     }
+    setLastTime(referenceGrouped)
 
-    setExerciseLogs(
-      sortedExercises.map((ex) => {
-        const lastSets = grouped[ex.name] ?? []
-        return {
-          name: ex.name,
-          sets: Array.from({ length: ex.sets }, (_, i) => {
-            const setNumber = i + 1
-            const lastSet = lastSets.find((s) => s.set_number === setNumber)
-            const weight = lastSet && !lastSet.skipped && lastSet.weight != null
-              ? String(lastSet.weight)
-              : ''
-            return { ...newSet(setNumber), weight }
-          }),
+    if (todaySession) {
+      const { data: todaySets } = await supabase
+        .from('session_sets')
+        .select('*')
+        .eq('session_id', todaySession.id)
+        .order('set_number', { ascending: true })
+
+      const dropSetIds = (todaySets ?? []).filter((s) => s.type === 'drop').map((s) => s.id)
+      const dropsBySet: Record<string, Drop[]> = {}
+      if (dropSetIds.length > 0) {
+        const { data: dropsData } = await supabase
+          .from('drop_sets')
+          .select('*')
+          .in('session_set_id', dropSetIds)
+          .order('position', { ascending: true })
+
+        for (const d of dropsData ?? []) {
+          if (!dropsBySet[d.session_set_id]) dropsBySet[d.session_set_id] = []
+          dropsBySet[d.session_set_id].push({
+            weight: d.weight != null ? String(d.weight) : '',
+            reps: d.reps != null ? String(d.reps) : '',
+          })
         }
-      }),
-    )
+      }
+
+      setExerciseLogs(
+        sortedExercises.map((ex) => {
+          const savedSets = (todaySets ?? []).filter((s) => s.exercise_name === ex.name)
+          if (savedSets.length === 0) {
+            return {
+              name: ex.name,
+              sets: Array.from({ length: ex.sets }, (_, i) => newSet(i + 1)),
+            }
+          }
+          return {
+            name: ex.name,
+            sets: savedSets.map((s) => ({
+              setNumber: s.set_number,
+              weight: s.weight != null ? String(s.weight) : '',
+              reps: s.reps != null ? String(s.reps) : '',
+              skipped: s.skipped,
+              type: s.type as SetType,
+              partialReps: s.partial_reps != null ? String(s.partial_reps) : '',
+              drops: dropsBySet[s.id] ?? [],
+            })),
+          }
+        }),
+      )
+    } else {
+      setExerciseLogs(
+        sortedExercises.map((ex) => {
+          const refSets = referenceGrouped[ex.name] ?? []
+          return {
+            name: ex.name,
+            sets: Array.from({ length: ex.sets }, (_, i) => {
+              const setNumber = i + 1
+              const refSet = refSets.find((s) => s.set_number === setNumber)
+              const weight =
+                refSet && !refSet.skipped && refSet.weight != null ? String(refSet.weight) : ''
+              return { ...newSet(setNumber), weight }
+            }),
+          }
+        }),
+      )
+    }
   }
 
   function updateSet(exIndex: number, setIndex: number, changes: Partial<SetEntry>) {
@@ -215,15 +279,27 @@ function Session() {
     if (!id) return
     setSaving(true)
 
-    const { data: session, error } = await supabase
-      .from('sessions')
-      .insert({ workout_id: id })
-      .select()
-      .single()
+    let sessionId = todaySessionId
 
-    if (error || !session) {
-      setSaving(false)
-      return
+    if (sessionId) {
+      await supabase.from('session_sets').delete().eq('session_id', sessionId)
+      await supabase
+        .from('sessions')
+        .update({ performed_at: new Date().toISOString() })
+        .eq('id', sessionId)
+    } else {
+      const { data: session, error } = await supabase
+        .from('sessions')
+        .insert({ workout_id: id })
+        .select()
+        .single()
+
+      if (error || !session) {
+        setSaving(false)
+        return
+      }
+      sessionId = session.id
+      setTodaySessionId(session.id)
     }
 
     const setsToSave = exerciseLogs.flatMap((ex) =>
@@ -236,7 +312,7 @@ function Session() {
       .from('session_sets')
       .insert(
         setsToSave.map(({ exerciseName, entry: s }) => ({
-          session_id: session.id,
+          session_id: sessionId,
           exercise_name: exerciseName,
           set_number: s.setNumber,
           weight: s.skipped || s.weight === '' ? null : Number(s.weight),
@@ -286,6 +362,13 @@ function Session() {
         &lt; Back
       </Link>
       <h1 className="text-3xl font-bold">{workout.name}</h1>
+
+      {todaySessionId && (
+        <p className="text-xs text-neutral-500 -mt-2">
+          You already logged this workout today — saving will update that entry, not add a new
+          one.
+        </p>
+      )}
 
       {exerciseLogs.map((ex, exIndex) => (
         <div
@@ -429,10 +512,14 @@ function Session() {
         disabled={saving}
         className="py-3 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-medium disabled:opacity-50"
       >
-        {saving ? 'Saving...' : 'Save session'}
+        {saving ? 'Saving...' : todaySessionId ? 'Update session' : 'Save session'}
       </button>
 
-      {saved && <p className="text-center text-sm text-green-400">Session saved.</p>}
+      {saved && (
+        <p className="text-center text-sm text-green-400">
+          {todaySessionId ? 'Session updated.' : 'Session saved.'}
+        </p>
+      )}
     </div>
   )
 }
