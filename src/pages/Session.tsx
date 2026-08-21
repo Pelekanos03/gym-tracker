@@ -148,14 +148,16 @@ function Session() {
     }
 
     const rows = exerciseLogs.flatMap((ex) =>
-      ex.sets.map((s) => ({
-        session_id: session.id,
-        exercise_name: ex.name,
-        set_number: s.setNumber,
-        weight: s.skipped || s.weight === '' ? null : Number(s.weight),
-        reps: s.skipped || s.reps === '' ? null : Number(s.reps),
-        skipped: s.skipped,
-      })),
+      ex.sets
+        .filter((s) => s.skipped || s.weight !== '' || s.reps !== '')
+        .map((s) => ({
+          session_id: session.id,
+          exercise_name: ex.name,
+          set_number: s.setNumber,
+          weight: s.skipped || s.weight === '' ? null : Number(s.weight),
+          reps: s.skipped || s.reps === '' ? null : Number(s.reps),
+          skipped: s.skipped,
+        })),
     )
 
     await supabase.from('session_sets').insert(rows)
@@ -199,15 +201,15 @@ function Session() {
           )}
 
           {ex.sets.map((s, setIndex) => (
-            <div key={setIndex} className="flex gap-2 items-center">
-              <span className="text-neutral-500 text-sm w-4">{s.setNumber}</span>
+            <div key={setIndex} className="flex gap-1.5 items-center">
+              <span className="text-neutral-500 text-sm w-4 shrink-0">{s.setNumber}</span>
               <input
                 type="number"
                 placeholder="Weight"
                 value={s.weight}
                 disabled={s.skipped}
                 onChange={(e) => updateSet(exIndex, setIndex, { weight: e.target.value })}
-                className="bg-neutral-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 disabled:opacity-40"
+                className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
               />
               <input
                 type="number"
@@ -215,11 +217,11 @@ function Session() {
                 value={s.reps}
                 disabled={s.skipped}
                 onChange={(e) => updateSet(exIndex, setIndex, { reps: e.target.value })}
-                className="bg-neutral-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 disabled:opacity-40"
+                className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
               />
               <button
                 onClick={() => toggleSkip(exIndex, setIndex)}
-                className={`text-xs px-2 py-2 rounded-lg transition-colors ${
+                className={`shrink-0 text-xs px-2 py-2 rounded-lg transition-colors ${
                   s.skipped
                     ? 'bg-neutral-700 text-neutral-200'
                     : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
@@ -230,7 +232,7 @@ function Session() {
               <button
                 onClick={() => removeSet(exIndex, setIndex)}
                 aria-label="Remove set"
-                className="text-neutral-500 hover:text-neutral-300 text-lg leading-none px-1"
+                className="shrink-0 text-neutral-500 hover:text-neutral-300 text-lg leading-none px-1"
               >
                 x
               </button>
