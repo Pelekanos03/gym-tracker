@@ -3,11 +3,21 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Workout } from '../types'
 
+type SetType = 'working' | 'warmup' | 'drop' | 'partial'
+
+type Drop = {
+  weight: string
+  reps: string
+}
+
 type SetEntry = {
   setNumber: number
   weight: string
   reps: string
   skipped: boolean
+  type: SetType
+  partialReps: string
+  drops: Drop[]
 }
 
 type ExerciseLog = {
@@ -20,6 +30,18 @@ type LastTimeSet = {
   weight: number | null
   reps: number | null
   skipped: boolean
+}
+
+function newSet(setNumber: number): SetEntry {
+  return {
+    setNumber,
+    weight: '',
+    reps: '',
+    skipped: false,
+    type: 'working',
+    partialReps: '',
+    drops: [],
+  }
 }
 
 function Session() {
@@ -51,12 +73,7 @@ function Session() {
     setExerciseLogs(
       sortedExercises.map((ex) => ({
         name: ex.name,
-        sets: Array.from({ length: ex.sets }, (_, i) => ({
-          setNumber: i + 1,
-          weight: '',
-          reps: '',
-          skipped: false,
-        })),
+        sets: Array.from({ length: ex.sets }, (_, i) => newSet(i + 1)),
       })),
     )
 
@@ -98,15 +115,7 @@ function Session() {
   function addSet(exIndex: number) {
     setExerciseLogs((logs) =>
       logs.map((ex, i) =>
-        i !== exIndex
-          ? ex
-          : {
-              ...ex,
-              sets: [
-                ...ex.sets,
-                { setNumber: ex.sets.length + 1, weight: '', reps: '', skipped: false },
-              ],
-            },
+        i !== exIndex ? ex : { ...ex, sets: [...ex.sets, newSet(ex.sets.length + 1)] },
       ),
     )
   }
@@ -132,6 +141,65 @@ function Session() {
     )
   }
 
+  function setType(exIndex: number, setIndex: number, type: SetType) {
+    updateSet(exIndex, setIndex, { type })
+  }
+
+  function addDrop(exIndex: number, setIndex: number) {
+    setExerciseLogs((logs) =>
+      logs.map((ex, i) =>
+        i !== exIndex
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j !== setIndex ? s : { ...s, drops: [...s.drops, { weight: '', reps: '' }] },
+              ),
+            },
+      ),
+    )
+  }
+
+  function updateDrop(
+    exIndex: number,
+    setIndex: number,
+    dropIndex: number,
+    changes: Partial<Drop>,
+  ) {
+    setExerciseLogs((logs) =>
+      logs.map((ex, i) =>
+        i !== exIndex
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j !== setIndex
+                  ? s
+                  : {
+                      ...s,
+                      drops: s.drops.map((d, k) => (k === dropIndex ? { ...d, ...changes } : d)),
+                    },
+              ),
+            },
+      ),
+    )
+  }
+
+  function removeDrop(exIndex: number, setIndex: number, dropIndex: number) {
+    setExerciseLogs((logs) =>
+      logs.map((ex, i) =>
+        i !== exIndex
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j !== setIndex ? s : { ...s, drops: s.drops.filter((_, k) => k !== dropIndex) },
+              ),
+            },
+      ),
+    )
+  }
+
   async function handleSaveSession() {
     if (!id) return
     setSaving(true)
@@ -147,20 +215,45 @@ function Session() {
       return
     }
 
-    const rows = exerciseLogs.flatMap((ex) =>
+    const setsToSave = exerciseLogs.flatMap((ex) =>
       ex.sets
         .filter((s) => s.skipped || s.weight !== '' || s.reps !== '')
-        .map((s) => ({
+        .map((s) => ({ exerciseName: ex.name, entry: s })),
+    )
+
+    const { data: insertedSets, error: setsError } = await supabase
+      .from('session_sets')
+      .insert(
+        setsToSave.map(({ exerciseName, entry: s }) => ({
           session_id: session.id,
-          exercise_name: ex.name,
+          exercise_name: exerciseName,
           set_number: s.setNumber,
           weight: s.skipped || s.weight === '' ? null : Number(s.weight),
           reps: s.skipped || s.reps === '' ? null : Number(s.reps),
           skipped: s.skipped,
+          type: s.type,
+          partial_reps:
+            s.type === 'partial' && s.partialReps !== '' ? Number(s.partialReps) : null,
         })),
-    )
+      )
+      .select()
 
-    await supabase.from('session_sets').insert(rows)
+    if (!setsError && insertedSets) {
+      const dropRows = insertedSets.flatMap((row, i) =>
+        setsToSave[i].entry.drops
+          .filter((d) => d.weight !== '' || d.reps !== '')
+          .map((d, position) => ({
+            session_set_id: row.id,
+            weight: d.weight === '' ? null : Number(d.weight),
+            reps: d.reps === '' ? null : Number(d.reps),
+            position,
+          })),
+      )
+
+      if (dropRows.length > 0) {
+        await supabase.from('drop_sets').insert(dropRows)
+      }
+    }
 
     setSaving(false)
     setSaved(true)
@@ -201,41 +294,113 @@ function Session() {
           )}
 
           {ex.sets.map((s, setIndex) => (
-            <div key={setIndex} className="flex gap-1.5 items-center">
-              <span className="text-neutral-500 text-sm w-4 shrink-0">{s.setNumber}</span>
-              <input
-                type="number"
-                placeholder="Weight"
-                value={s.weight}
-                disabled={s.skipped}
-                onChange={(e) => updateSet(exIndex, setIndex, { weight: e.target.value })}
-                className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
-              />
-              <input
-                type="number"
-                placeholder="Reps"
-                value={s.reps}
-                disabled={s.skipped}
-                onChange={(e) => updateSet(exIndex, setIndex, { reps: e.target.value })}
-                className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
-              />
-              <button
-                onClick={() => toggleSkip(exIndex, setIndex)}
-                className={`shrink-0 text-xs px-2 py-2 rounded-lg transition-colors ${
-                  s.skipped
-                    ? 'bg-neutral-700 text-neutral-200'
-                    : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-                }`}
-              >
-                Skip
-              </button>
-              <button
-                onClick={() => removeSet(exIndex, setIndex)}
-                aria-label="Remove set"
-                className="shrink-0 text-neutral-500 hover:text-neutral-300 text-lg leading-none px-1"
-              >
-                x
-              </button>
+            <div key={setIndex} className="flex flex-col gap-1.5">
+              <div className="flex gap-1.5 items-center">
+                <span className="text-neutral-500 text-sm w-4 shrink-0">{s.setNumber}</span>
+                <input
+                  type="number"
+                  placeholder="Weight"
+                  value={s.weight}
+                  disabled={s.skipped}
+                  onChange={(e) => updateSet(exIndex, setIndex, { weight: e.target.value })}
+                  className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
+                />
+                <input
+                  type="number"
+                  placeholder="Reps"
+                  value={s.reps}
+                  disabled={s.skipped}
+                  onChange={(e) => updateSet(exIndex, setIndex, { reps: e.target.value })}
+                  className="bg-neutral-800 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 disabled:opacity-40"
+                />
+                <button
+                  onClick={() => toggleSkip(exIndex, setIndex)}
+                  className={`shrink-0 text-xs px-2 py-2 rounded-lg transition-colors ${
+                    s.skipped
+                      ? 'bg-neutral-700 text-neutral-200'
+                      : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                  }`}
+                >
+                  Skip
+                </button>
+                <button
+                  onClick={() => removeSet(exIndex, setIndex)}
+                  aria-label="Remove set"
+                  className="shrink-0 text-neutral-500 hover:text-neutral-300 text-lg leading-none px-1"
+                >
+                  x
+                </button>
+              </div>
+
+              <div className="flex gap-1.5 pl-[22px]">
+                {(['warmup', 'drop', 'partial'] as SetType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setType(exIndex, setIndex, s.type === t ? 'working' : t)}
+                    className={`text-xs px-2 py-1 rounded-md transition-colors capitalize ${
+                      s.type === t
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {s.type === 'partial' && (
+                <div className="flex gap-1.5 items-center pl-[22px]">
+                  <input
+                    type="number"
+                    placeholder="Partial reps"
+                    value={s.partialReps}
+                    onChange={(e) =>
+                      updateSet(exIndex, setIndex, { partialReps: e.target.value })
+                    }
+                    className="bg-neutral-800 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 w-28 min-w-0"
+                  />
+                </div>
+              )}
+
+              {s.type === 'drop' && (
+                <div className="flex flex-col gap-1.5 pl-[22px]">
+                  {s.drops.map((d, dropIndex) => (
+                    <div key={dropIndex} className="flex gap-1.5 items-center">
+                      <input
+                        type="number"
+                        placeholder="Drop weight"
+                        value={d.weight}
+                        onChange={(e) =>
+                          updateDrop(exIndex, setIndex, dropIndex, { weight: e.target.value })
+                        }
+                        className="bg-neutral-800 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Reps"
+                        value={d.reps}
+                        onChange={(e) =>
+                          updateDrop(exIndex, setIndex, dropIndex, { reps: e.target.value })
+                        }
+                        className="bg-neutral-800 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0"
+                      />
+                      <button
+                        onClick={() => removeDrop(exIndex, setIndex, dropIndex)}
+                        aria-label="Remove drop"
+                        className="shrink-0 text-neutral-500 hover:text-neutral-300 text-base leading-none px-1"
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => addDrop(exIndex, setIndex)}
+                    className="py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 transition-colors text-xs text-neutral-400"
+                  >
+                    + Add drop
+                  </button>
+                </div>
+              )}
             </div>
           ))}
 
