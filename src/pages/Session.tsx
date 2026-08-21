@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Workout } from '../types'
@@ -69,10 +69,31 @@ function Session() {
   const [todaySessionId, setTodaySessionId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [pending, setPending] = useState(false)
+  const skipNextAutoSave = useRef(false)
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     load()
   }, [id])
+
+  useEffect(() => {
+    if (skipNextAutoSave.current) {
+      skipNextAutoSave.current = false
+      return
+    }
+
+    setPending(true)
+    if (saveTimeout.current) clearTimeout(saveTimeout.current)
+    saveTimeout.current = setTimeout(() => {
+      handleSaveSession()
+    }, 1000)
+
+    return () => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseLogs, cardioLogs])
 
   async function load() {
     const { data: workoutData } = await supabase
@@ -143,6 +164,7 @@ function Session() {
         }
       }
 
+      skipNextAutoSave.current = true
       setExerciseLogs(
         sortedExercises.map((ex) => {
           const savedSets = (todaySets ?? []).filter((s) => s.exercise_name === ex.name)
@@ -183,6 +205,7 @@ function Session() {
         }),
       )
     } else {
+      skipNextAutoSave.current = true
       setExerciseLogs(
         sortedExercises.map((ex) => {
           const refSets = referenceGrouped[ex.name] ?? []
@@ -315,6 +338,7 @@ function Session() {
 
   async function handleSaveSession() {
     if (!id) return
+    setPending(false)
     setSaving(true)
 
     let sessionId = todaySessionId
@@ -587,19 +611,9 @@ function Session() {
         </div>
       ))}
 
-      <button
-        onClick={handleSaveSession}
-        disabled={saving}
-        className="py-3 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-medium disabled:opacity-50"
-      >
-        {saving ? 'Saving...' : todaySessionId ? 'Update session' : 'Save session'}
-      </button>
-
-      {saved && (
-        <p className="text-center text-sm text-green-400">
-          {todaySessionId ? 'Session updated.' : 'Session saved.'}
-        </p>
-      )}
+      <p className="text-center text-sm text-neutral-500 pb-4">
+        {saving ? 'Saving...' : pending ? 'Unsaved changes...' : saved ? 'All changes saved' : ''}
+      </p>
     </div>
   )
 }
