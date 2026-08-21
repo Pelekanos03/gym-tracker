@@ -278,7 +278,23 @@ function Session() {
   }
 
   function setType(exIndex: number, setIndex: number, type: SetType) {
-    updateSet(exIndex, setIndex, { type })
+    setExerciseLogs((logs) =>
+      logs.map((ex, i) =>
+        i !== exIndex
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, j) => {
+                if (j !== setIndex) return s
+                const drops =
+                  type === 'drop' && s.drops.length === 0
+                    ? [{ weight: '', reps: '' }]
+                    : s.drops
+                return { ...s, type, drops }
+              }),
+            },
+      ),
+    )
   }
 
   function addDrop(exIndex: number, setIndex: number) {
