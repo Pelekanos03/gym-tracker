@@ -97,7 +97,15 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center gap-4 p-6">
-      <h1 className="text-3xl font-bold">Gym Tracker</h1>
+      <div className="w-full max-w-sm flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Gym Tracker</h1>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="text-sm text-neutral-500 hover:text-neutral-300"
+        >
+          Sign out
+        </button>
+      </div>
 
       <ActivityCalendar />
 
