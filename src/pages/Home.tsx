@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Exercise, Workout } from '../types'
+import ActivityCalendar from '../components/ActivityCalendar'
 
 function Home() {
   const [workouts, setWorkouts] = useState<Workout[]>([])
@@ -96,6 +97,8 @@ function Home() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center gap-4 p-6">
       <h1 className="text-3xl font-bold">Gym Tracker</h1>
+
+      <ActivityCalendar />
 
       <ul className="w-full max-w-sm flex flex-col gap-2">
         {workouts.map((w) => (
