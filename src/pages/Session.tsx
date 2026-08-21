@@ -70,13 +70,6 @@ function Session() {
     )
     setWorkout({ ...workoutData, workout_exercises: sortedExercises })
 
-    setExerciseLogs(
-      sortedExercises.map((ex) => ({
-        name: ex.name,
-        sets: Array.from({ length: ex.sets }, (_, i) => newSet(i + 1)),
-      })),
-    )
-
     const { data: lastSession } = await supabase
       .from('sessions')
       .select('id')
@@ -85,6 +78,8 @@ function Session() {
       .limit(1)
       .maybeSingle()
 
+    let grouped: Record<string, LastTimeSet[]> = {}
+
     if (lastSession) {
       const { data: lastSets } = await supabase
         .from('session_sets')
@@ -92,7 +87,6 @@ function Session() {
         .eq('session_id', lastSession.id)
 
       if (lastSets) {
-        const grouped: Record<string, LastTimeSet[]> = {}
         for (const s of lastSets) {
           if (!grouped[s.exercise_name]) grouped[s.exercise_name] = []
           grouped[s.exercise_name].push(s)
@@ -100,6 +94,23 @@ function Session() {
         setLastTime(grouped)
       }
     }
+
+    setExerciseLogs(
+      sortedExercises.map((ex) => {
+        const lastSets = grouped[ex.name] ?? []
+        return {
+          name: ex.name,
+          sets: Array.from({ length: ex.sets }, (_, i) => {
+            const setNumber = i + 1
+            const lastSet = lastSets.find((s) => s.set_number === setNumber)
+            const weight = lastSet && !lastSet.skipped && lastSet.weight != null
+              ? String(lastSet.weight)
+              : ''
+            return { ...newSet(setNumber), weight }
+          }),
+        }
+      }),
+    )
   }
 
   function updateSet(exIndex: number, setIndex: number, changes: Partial<SetEntry>) {
