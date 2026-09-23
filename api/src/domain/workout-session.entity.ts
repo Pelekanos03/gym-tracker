@@ -6,15 +6,14 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { SessionStatus } from '../common/enums';
+import { SessionStatus, SetType } from '../common/enums';
 import { User } from './user.entity';
-import { ProgramAssignment } from './program-assignment.entity';
 import { ProgramDay } from './program-day.entity';
 import { SetLog } from './set-log.entity';
 
 /**
- * One training session a client actually did (or was scheduled to do).
- * This is the record a coach opens to "see what their client did".
+ * One training session a user actually did (or was scheduled to do).
+ * This is the record a friend opens to "see what they did".
  */
 @Entity('workout_sessions')
 export class WorkoutSession {
@@ -25,16 +24,9 @@ export class WorkoutSession {
     eager: true,
     onDelete: 'CASCADE',
   })
-  client: User;
+  user: User;
 
-  /** Which assignment this belongs to (null for ad-hoc sessions). */
-  @ManyToOne(() => ProgramAssignment, (a) => a.sessions, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  assignment: ProgramAssignment | null;
-
-  /** The planned day this session follows (null for ad-hoc sessions). */
+  /** The planned day (from one of this user's own programs) this session follows, if any. */
   @ManyToOne(() => ProgramDay, { nullable: true, eager: true, onDelete: 'SET NULL' })
   programDay: ProgramDay | null;
 
@@ -53,10 +45,13 @@ export class WorkoutSession {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  /** Total weight moved in the session (kg). A simple, useful volume proxy. */
+  /**
+   * Total weight moved in the session (kg). Everything counts except
+   * warm-ups — drop sets and supersets are real working volume too.
+   */
   totalVolume(): number {
     return (this.sets ?? [])
-      .filter((s) => !s.isWarmup)
+      .filter((s) => s.setType !== SetType.WARMUP)
       .reduce((sum, s) => sum + s.weight * s.reps, 0);
   }
 }

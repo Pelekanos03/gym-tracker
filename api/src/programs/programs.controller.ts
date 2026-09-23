@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ProgramsService } from './programs.service';
 import { CreateProgramDto } from './dto/create-program.dto';
-import { AssignProgramDto } from './dto/assign-program.dto';
+import { UpdateProgramDto } from './dto/update-program.dto';
+import { CopyProgramDto } from './dto/copy-program.dto';
+import { DeleteProgramDto } from './dto/delete-program.dto';
 
 @Controller('programs')
 export class ProgramsController {
@@ -13,8 +15,8 @@ export class ProgramsController {
   }
 
   @Get()
-  list(@Query('coachId') coachId: string) {
-    return this.programs.findByCoach(coachId);
+  list(@Query('ownerId') ownerId: string) {
+    return this.programs.findByOwner(ownerId);
   }
 
   @Get(':id')
@@ -22,8 +24,20 @@ export class ProgramsController {
     return this.programs.findById(id);
   }
 
-  @Post(':id/assignments')
-  assign(@Param('id') id: string, @Body() dto: AssignProgramDto) {
-    return this.programs.assign(id, dto);
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateProgramDto) {
+    return this.programs.update(id, dto);
+  }
+
+  /** Copy this program into a friend's (or your own) library. */
+  @Post(':id/copy')
+  copy(@Param('id') id: string, @Body() dto: CopyProgramDto) {
+    return this.programs.copy(id, dto);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Body() dto: DeleteProgramDto) {
+    await this.programs.delete(id, dto.ownerId);
+    return { ok: true };
   }
 }

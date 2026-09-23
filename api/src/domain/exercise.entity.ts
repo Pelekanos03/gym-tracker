@@ -3,7 +3,7 @@ import { Discipline, ExerciseCategory } from '../common/enums';
 
 /**
  * A movement in the exercise library (Back Squat, Bench Press, Barbell Row, ...).
- * Coaches pick from these when building a program; clients log sets against them.
+ * Users pick from these when building a program, and log sets against them.
  */
 @Entity('exercises')
 @Unique(['name'])

@@ -70,6 +70,14 @@ input, select, textarea, button {
   border-radius: 7px;
   padding: .45rem .6rem;
 }
+/*
+ * Without this, a bare <input>/<select> ignores its flex/grid container and
+ * uses the browser's default intrinsic width (~170-200px) instead — it only
+ * looks fine by luck when the container happens to be wide enough, and
+ * silently overflows (dragging the whole page into horizontal scroll) the
+ * moment the container is narrower, e.g. on a phone.
+ */
+input, select, textarea { width: 100%; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); }
 
 .field { margin-bottom: .75rem; }
@@ -88,6 +96,15 @@ button.small { padding: .25rem .5rem; font-size: .8rem; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+
+/*
+ * Wrap a table in this to let it scroll horizontally on narrow screens
+ * instead of the whole page. min-width:max-content beats the table's own
+ * width:100% only when content genuinely needs more room than the
+ * container has — so the table still stretches to fill on wide screens.
+ */
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.table-scroll table { min-width: max-content; }
 th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; }
 
@@ -111,9 +128,6 @@ th { color: var(--muted); font-weight: 600; }
   margin-bottom: 1rem;
   font-size: .9rem;
 }
-.tabs { display: flex; gap: .5rem; margin-bottom: 1.25rem; }
+.tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; }
 .tabs button { background: var(--panel-2); border-color: var(--border); color: var(--muted); font-weight: 500; }
 .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-.spark { display: flex; align-items: flex-end; gap: 3px; height: 40px; }
-.spark i { width: 8px; background: var(--accent); border-radius: 2px 2px 0 0; display: block; }

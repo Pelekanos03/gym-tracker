@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../domain/user.entity';
-import { UserRole } from '../common/enums';
 import { hashPassword } from '../common/password';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -26,17 +25,13 @@ export class UsersService {
     const user = this.users.create({
       name: dto.name,
       email: dto.email,
-      role: dto.role,
       passwordHash: hashPassword(dto.password),
     });
     return this.users.save(user);
   }
 
-  findAll(role?: UserRole): Promise<User[]> {
-    return this.users.find({
-      where: role ? { role } : {},
-      order: { createdAt: 'ASC' },
-    });
+  findAll(): Promise<User[]> {
+    return this.users.find({ order: { createdAt: 'ASC' } });
   }
 
   async findById(id: string): Promise<User> {
@@ -45,12 +40,21 @@ export class UsersService {
     return user;
   }
 
-  /** Used by other services that need to be sure the id belongs to a coach/client. */
-  async requireRole(id: string, role: UserRole): Promise<User> {
-    const user = await this.findById(id);
-    if (user.role !== role) {
-      throw new NotFoundException(`User ${id} is not a ${role.toLowerCase()}`);
-    }
-    return user;
+  findByEmail(email: string): Promise<User | null> {
+    return this.users.findOne({ where: { email } });
+  }
+
+  /** Simple substring search over name/email, for finding people to friend. */
+  async search(q: string): Promise<User[]> {
+    const query = q.trim().toLowerCase();
+    if (!query) return [];
+    const all = await this.users.find({ order: { name: 'ASC' } });
+    return all
+      .filter(
+        (u) =>
+          u.name.toLowerCase().includes(query) ||
+          u.email.toLowerCase().includes(query),
+      )
+      .slice(0, 20);
   }
 }

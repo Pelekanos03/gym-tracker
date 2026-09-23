@@ -6,10 +6,11 @@ import {
 } from 'typeorm';
 import { Exercise } from './exercise.entity';
 import { WorkoutSession } from './workout-session.entity';
+import { SetType } from '../common/enums';
 
 /**
- * One set the client performed: weight x reps, optionally with an RPE.
- * The smallest unit of "what the client did", and the raw material for
+ * One set the user performed: weight x reps, optionally with an RPE.
+ * The smallest unit of "what the user did", and the raw material for
  * every progress chart.
  */
 @Entity('set_logs')
@@ -38,8 +39,9 @@ export class SetLog {
   @Column({ type: 'float', nullable: true })
   rpe: number | null;
 
-  @Column({ name: 'is_warmup', default: false })
-  isWarmup: boolean;
+  /** What role this set played — drives volume/progress rules, see SetType. */
+  @Column({ name: 'set_type', type: 'varchar', enum: SetType, default: SetType.WORKING })
+  setType: SetType;
 
   /**
    * Estimated one-rep max using the Epley formula.

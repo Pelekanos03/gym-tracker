@@ -10,7 +10,7 @@ import { ProgramDay } from './program-day.entity';
 /**
  * A single prescribed line on a training day:
  *   "Back Squat — 5 sets x 3 reps @ RPE 8" or "@ 80% 1RM".
- * The client will log actual sets against the same Exercise.
+ * The user will log actual sets against the same Exercise.
  */
 @Entity('program_exercises')
 export class ProgramExercise {
@@ -33,13 +33,17 @@ export class ProgramExercise {
   @Column({ name: 'target_reps', default: 5 })
   targetReps: number;
 
-  /** Rate of Perceived Exertion target, 1-10. Null when the coach prescribes % instead. */
+  /** Rate of Perceived Exertion target, 1-10. Null when % is prescribed instead. */
   @Column({ name: 'target_rpe', type: 'float', nullable: true })
   targetRpe: number | null;
 
-  /** Percentage of one-rep-max target. Null when the coach prescribes RPE instead. */
+  /** Percentage of one-rep-max target. Null when RPE is prescribed instead. */
   @Column({ name: 'target_percent_1rm', type: 'float', nullable: true })
   targetPercent1rm: number | null;
+
+  /** Exact prescribed load in kg — how a coach sends a client a concrete number instead of RPE/%1RM. */
+  @Column({ name: 'target_weight', type: 'float', nullable: true })
+  targetWeight: number | null;
 
   @Column({ default: '' })
   notes: string;

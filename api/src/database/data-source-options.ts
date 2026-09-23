@@ -1,11 +1,12 @@
 import { DataSourceOptions } from 'typeorm';
 import { User } from '../domain/user.entity';
-import { CoachingRelationship } from '../domain/coaching-relationship.entity';
+import { Friendship } from '../domain/friendship.entity';
+import { Coaching } from '../domain/coaching.entity';
 import { Exercise } from '../domain/exercise.entity';
 import { Program } from '../domain/program.entity';
 import { ProgramDay } from '../domain/program-day.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
-import { ProgramAssignment } from '../domain/program-assignment.entity';
+import { ProgramShare } from '../domain/program-share.entity';
 import { WorkoutSession } from '../domain/workout-session.entity';
 import { SetLog } from '../domain/set-log.entity';
 
@@ -19,12 +20,13 @@ export const dataSourceOptions: DataSourceOptions = {
   database: process.env.DATABASE_PATH ?? 'gym-app.sqlite',
   entities: [
     User,
-    CoachingRelationship,
+    Friendship,
+    Coaching,
     Exercise,
     Program,
     ProgramDay,
     ProgramExercise,
-    ProgramAssignment,
+    ProgramShare,
     WorkoutSession,
     SetLog,
   ],

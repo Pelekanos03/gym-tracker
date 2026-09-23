@@ -1,14 +1,28 @@
 // Mirrors the shapes the NestJS API returns. Kept deliberately small.
 
-export type UserRole = 'COACH' | 'CLIENT';
 export type Discipline = 'POWERLIFTING' | 'BODYBUILDING' | 'BOTH';
 export type ExerciseCategory = 'COMPOUND' | 'ISOLATION';
+
+/**
+ * What role a set played. Drives two rules on the backend:
+ *  - volume counts every type except WARMUP
+ *  - progress/PR charts count WORKING sets only
+ */
+export type SetType = 'WORKING' | 'WARMUP' | 'DROP_SET' | 'SUPERSET' | 'BACKOFF' | 'AMRAP';
+
+export const SET_TYPE_LABELS: Record<SetType, string> = {
+  WORKING: 'Working',
+  WARMUP: 'Warm-up',
+  DROP_SET: 'Drop set',
+  SUPERSET: 'Superset',
+  BACKOFF: 'Back-off',
+  AMRAP: 'AMRAP',
+};
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
   createdAt: string;
 }
 
@@ -21,9 +35,39 @@ export interface Exercise {
   isCompetitionLift: boolean;
 }
 
-export interface RosterEntry {
-  relationshipId: string;
+export interface FriendEntry {
+  friendshipId: string;
   since: string;
+  friend: User;
+}
+
+export interface FriendRequest {
+  id: string;
+  createdAt: string;
+  from: User;
+  to: User;
+}
+
+/**
+ * An elevated permission on top of an existing friendship: the coach sees
+ * the client's full history and programs, which a plain friend can't (a
+ * plain friend only sees progress). The coach requests it; the client
+ * accepts.
+ */
+export interface CoachingRequest {
+  id: string;
+  createdAt: string;
+  coach: User;
+  client: User;
+}
+
+export interface CoachLink {
+  coachingId: string;
+  coach: User;
+}
+
+export interface ClientLink {
+  coachingId: string;
   client: User;
 }
 
@@ -35,6 +79,7 @@ export interface ProgramExercise {
   targetReps: number;
   targetRpe: number | null;
   targetPercent1rm: number | null;
+  targetWeight: number | null;
   notes: string;
 }
 
@@ -52,7 +97,7 @@ export interface Program {
   description: string;
   discipline: Discipline;
   lengthWeeks: number;
-  coach: User;
+  owner: User;
   days: ProgramDay[];
   createdAt: string;
 }
@@ -64,12 +109,13 @@ export interface SetLog {
   weight: number;
   reps: number;
   rpe: number | null;
-  isWarmup: boolean;
+  setType: SetType;
 }
 
 export interface WorkoutSession {
   id: string;
-  client: User;
+  user: User;
+  programDay: ProgramDay | null;
   date: string;
   status: 'PLANNED' | 'COMPLETED' | 'SKIPPED';
   notes: string;

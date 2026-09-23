@@ -10,7 +10,7 @@ import { ProgramExercise } from './program-exercise.entity';
 
 /**
  * One training day inside a program, e.g. Week 1 / Day 2 "Heavy Bench".
- * Ordering is explicit via weekNumber + dayNumber so the client always
+ * Ordering is explicit via weekNumber + dayNumber so the user always
  * knows what comes next.
  */
 @Entity('program_days')

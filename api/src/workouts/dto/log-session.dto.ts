@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -13,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { SessionStatus } from '../../common/enums';
+import { SessionStatus, SetType } from '../../common/enums';
 
 export class SetLogInput {
   @IsUUID()
@@ -38,19 +37,15 @@ export class SetLogInput {
   rpe?: number;
 
   @IsOptional()
-  @IsBoolean()
-  isWarmup?: boolean;
+  @IsEnum(SetType)
+  setType?: SetType;
 }
 
 export class LogSessionDto {
   @IsUUID()
-  clientId: string;
+  userId: string;
 
-  /** Optional: ties the session to a specific planned day of an assigned program. */
-  @IsOptional()
-  @IsUUID()
-  assignmentId?: string;
-
+  /** Optional: ties the session to a specific planned day of one of this user's own programs. */
   @IsOptional()
   @IsUUID()
   programDayId?: string;

@@ -5,18 +5,18 @@ import { ProgressService } from './progress.service';
 export class ProgressController {
   constructor(private readonly progress: ProgressService) {}
 
-  /** Client's own progress. */
-  @Get('clients/:clientId/progress')
-  mine(@Param('clientId') clientId: string) {
-    return this.progress.forClient(clientId);
+  /** A user's own progress. */
+  @Get('users/:userId/progress')
+  mine(@Param('userId') userId: string) {
+    return this.progress.forUser(userId);
   }
 
-  /** Coach viewing a client's progress. */
-  @Get('coaches/:coachId/clients/:clientId/progress')
-  clientProgress(
-    @Param('coachId') coachId: string,
-    @Param('clientId') clientId: string,
+  /** A friend's progress (requires an accepted friendship). */
+  @Get('users/:viewerId/friends/:friendId/progress')
+  friendProgress(
+    @Param('viewerId') viewerId: string,
+    @Param('friendId') friendId: string,
   ) {
-    return this.progress.forClientAsCoach(coachId, clientId);
+    return this.progress.forUserAsFriend(viewerId, friendId);
   }
 }

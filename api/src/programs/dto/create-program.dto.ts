@@ -42,6 +42,12 @@ export class ProgramExerciseInput {
   @Max(100)
   targetPercent1rm?: number;
 
+  /** Exact prescribed load in kg — how a coach sends a concrete number instead of RPE/%1RM. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  targetWeight?: number;
+
   @IsOptional()
   @IsString()
   notes?: string;
@@ -68,7 +74,7 @@ export class ProgramDayInput {
 
 export class CreateProgramDto {
   @IsUUID()
-  coachId: string;
+  ownerId: string;
 
   @IsString()
   @MinLength(2)

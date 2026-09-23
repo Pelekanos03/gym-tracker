@@ -4,6 +4,8 @@ import { dataSourceOptions } from './database/data-source-options';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
+import { FriendshipModule } from './friendship/friendship.module';
 import { CoachingModule } from './coaching/coaching.module';
 import { ExercisesModule } from './exercises/exercises.module';
 import { ProgramsModule } from './programs/programs.module';
@@ -14,6 +16,8 @@ import { ProgressModule } from './progress/progress.module';
   imports: [
     TypeOrmModule.forRoot(dataSourceOptions),
     UsersModule,
+    AuthModule,
+    FriendshipModule,
     CoachingModule,
     ExercisesModule,
     ProgramsModule,

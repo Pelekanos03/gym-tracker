@@ -9,12 +9,11 @@ import {
 import { Discipline } from '../common/enums';
 import { User } from './user.entity';
 import { ProgramDay } from './program-day.entity';
-import { ProgramAssignment } from './program-assignment.entity';
 
 /**
- * A training plan authored by a coach: an ordered set of days, each with
- * prescribed exercises. A program is a template — it becomes "live" for a
- * client through a ProgramAssignment.
+ * A reusable training template: an ordered set of days, each with
+ * prescribed exercises. Every user owns their own programs — built from
+ * scratch, or copied from a friend's.
  */
 @Entity('programs')
 export class Program {
@@ -37,16 +36,13 @@ export class Program {
     eager: true,
     onDelete: 'CASCADE',
   })
-  coach: User;
+  owner: User;
 
   @OneToMany(() => ProgramDay, (day) => day.program, {
     cascade: true,
     eager: true,
   })
   days: ProgramDay[];
-
-  @OneToMany(() => ProgramAssignment, (assignment) => assignment.program)
-  assignments: ProgramAssignment[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

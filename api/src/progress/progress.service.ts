@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SetLog } from '../domain/set-log.entity';
 import { WorkoutSession } from '../domain/workout-session.entity';
-import { CoachingService } from '../coaching/coaching.service';
+import { FriendshipService } from '../friendship/friendship.service';
+import { SetType } from '../common/enums';
 
 export interface ProgressPoint {
   date: string;
@@ -24,16 +25,16 @@ export class ProgressService {
   constructor(
     @InjectRepository(WorkoutSession)
     private readonly sessions: Repository<WorkoutSession>,
-    private readonly coaching: CoachingService,
+    private readonly friendship: FriendshipService,
   ) {}
 
   /**
-   * Builds an estimated-1RM timeline per exercise for a client.
+   * Builds an estimated-1RM timeline per exercise for a user.
    * One point per (exercise, date): the best working set that day.
    */
-  async forClient(clientId: string): Promise<ExerciseProgress[]> {
+  async forUser(userId: string): Promise<ExerciseProgress[]> {
     const sessions = await this.sessions.find({
-      where: { client: { id: clientId } },
+      where: { user: { id: userId } },
       order: { date: 'ASC' },
     });
 
@@ -42,7 +43,10 @@ export class ProgressService {
 
     for (const session of sessions) {
       for (const set of session.sets ?? []) {
-        if (set.isWarmup) continue;
+        // PRs and the progress line only reflect genuine working sets —
+        // warm-ups, drop sets, supersets etc. add volume but would otherwise
+        // muddy "what's my real top set" with lighter/fatigued numbers.
+        if (set.setType !== SetType.WORKING) continue;
 
         const progress = this.ensureExercise(byExercise, set);
         const e1rm = set.estimatedOneRepMax();
@@ -68,13 +72,13 @@ export class ProgressService {
     return [...byExercise.values()];
   }
 
-  /** Same data, but only after checking the coach owns this client. */
-  async forClientAsCoach(
-    coachId: string,
-    clientId: string,
+  /** Same data, but only after checking the viewer is friends with this user. */
+  async forUserAsFriend(
+    viewerId: string,
+    userId: string,
   ): Promise<ExerciseProgress[]> {
-    await this.coaching.assertCoaches(coachId, clientId);
-    return this.forClient(clientId);
+    await this.friendship.assertFriends(viewerId, userId);
+    return this.forUser(userId);
   }
 
   private ensureExercise(

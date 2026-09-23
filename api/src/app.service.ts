@@ -6,7 +6,7 @@ export class AppService {
     return {
       name: 'gym-app API',
       description:
-        'Powerlifting & bodybuilding coaching platform. Coaches build programs for their clients and track what they actually do.',
+        'Powerlifting & bodybuilding tracker. Friends build programs, copy each other\'s, and track what they actually do.',
       status: 'ok',
     };
   }

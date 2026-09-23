@@ -6,15 +6,13 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { UserRole } from '../common/enums';
-import { CoachingRelationship } from './coaching-relationship.entity';
 import { Program } from './program.entity';
 import { WorkoutSession } from './workout-session.entity';
 
 /**
- * A person using the platform. The same class models both coaches and clients;
- * the `role` decides which behaviour is allowed. This is a deliberate OOP choice:
- * one identity type, role-based behaviour, instead of two near-duplicate classes.
+ * A person using the platform. Everyone is a peer — there is no coach/client
+ * split. Users become friends, build their own programs, log their own
+ * workouts, and can copy a friend's program into their own.
  */
 @Entity('users')
 export class User {
@@ -35,33 +33,14 @@ export class User {
   @Column({ name: 'password_hash' })
   passwordHash: string;
 
-  @Column({ type: 'varchar', enum: UserRole })
-  role: UserRole;
-
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  /** Relationships where this user is the coach. */
-  @OneToMany(() => CoachingRelationship, (rel) => rel.coach)
-  clientLinks: CoachingRelationship[];
-
-  /** Relationships where this user is the client. */
-  @OneToMany(() => CoachingRelationship, (rel) => rel.client)
-  coachLinks: CoachingRelationship[];
-
-  /** Programs this user authored (only meaningful for coaches). */
-  @OneToMany(() => Program, (program) => program.coach)
+  /** Programs this user owns (authored themselves, or copied from a friend). */
+  @OneToMany(() => Program, (program) => program.owner)
   programs: Program[];
 
-  /** Workout sessions this user performed (only meaningful for clients). */
-  @OneToMany(() => WorkoutSession, (session) => session.client)
+  /** Workout sessions this user logged. */
+  @OneToMany(() => WorkoutSession, (session) => session.user)
   sessions: WorkoutSession[];
-
-  isCoach(): boolean {
-    return this.role === UserRole.COACH;
-  }
-
-  isClient(): boolean {
-    return this.role === UserRole.CLIENT;
-  }
 }
