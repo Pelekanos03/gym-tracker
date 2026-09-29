@@ -5,6 +5,7 @@ import { Program } from '../domain/program.entity';
 import { ProgramDay } from '../domain/program-day.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
 import { Exercise } from '../domain/exercise.entity';
+import { SetType } from '../common/enums';
 import { UsersService } from '../users/users.service';
 import { ExercisesService } from '../exercises/exercises.service';
 import { CoachingService } from '../coaching/coaching.service';
@@ -32,7 +33,6 @@ export class ProgramsService {
     const program = new Program();
     program.name = dto.name;
     program.description = dto.description ?? '';
-    if (dto.discipline) program.discipline = dto.discipline;
     if (dto.lengthWeeks) program.lengthWeeks = dto.lengthWeeks;
     program.owner = owner;
     program.days = days;
@@ -72,7 +72,6 @@ export class ProgramsService {
 
     program.name = dto.name;
     program.description = dto.description ?? '';
-    if (dto.discipline) program.discipline = dto.discipline;
     if (dto.lengthWeeks) program.lengthWeeks = dto.lengthWeeks;
 
     if (program.days.length > 0) {
@@ -101,7 +100,6 @@ export class ProgramsService {
     const copy = new Program();
     copy.name = source.name;
     copy.description = source.description;
-    copy.discipline = source.discipline;
     copy.lengthWeeks = source.lengthWeeks;
     copy.owner = toUser;
     copy.days = source.days.map((day) => {
@@ -118,6 +116,7 @@ export class ProgramsService {
         ex.targetRpe = pe.targetRpe;
         ex.targetPercent1rm = pe.targetPercent1rm;
         ex.targetWeight = pe.targetWeight;
+        ex.setType = pe.setType;
         ex.notes = pe.notes;
         return ex;
       });
@@ -157,6 +156,7 @@ export class ProgramsService {
         pe.targetRpe = exInput.targetRpe ?? null;
         pe.targetPercent1rm = exInput.targetPercent1rm ?? null;
         pe.targetWeight = exInput.targetWeight ?? null;
+        pe.setType = exInput.setType ?? SetType.WORKING;
         pe.notes = exInput.notes ?? '';
         return pe;
       });

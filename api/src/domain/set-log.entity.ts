@@ -2,10 +2,13 @@ import {
   Column,
   Entity,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Exercise } from './exercise.entity';
 import { WorkoutSession } from './workout-session.entity';
+import { SetDrop } from './set-drop.entity';
+import { SupersetPartner } from './superset-partner.entity';
 import { SetType } from '../common/enums';
 
 /**
@@ -42,6 +45,20 @@ export class SetLog {
   /** What role this set played — drives volume/progress rules, see SetType. */
   @Column({ name: 'set_type', type: 'varchar', enum: SetType, default: SetType.WORKING })
   setType: SetType;
+
+  /** The weight drops that followed the top set. Only a DROP_SET has any. */
+  @OneToMany(() => SetDrop, (drop) => drop.set, { cascade: true, eager: true })
+  drops: SetDrop[];
+
+  /** The other exercises done back-to-back with this one. Only a SUPERSET has any. */
+  @OneToMany(() => SupersetPartner, (partner) => partner.set, { cascade: true, eager: true })
+  supersetPartners: SupersetPartner[];
+
+  /** Weight moved in this set (kg), including every drop or superset partner that went with it. */
+  volume(): number {
+    const extras = [...(this.drops ?? []), ...(this.supersetPartners ?? [])];
+    return this.weight * this.reps + extras.reduce((sum, x) => sum + x.volume(), 0);
+  }
 
   /**
    * Estimated one-rep max using the Epley formula.

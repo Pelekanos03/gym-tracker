@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
-import type { Discipline, Exercise, ExerciseCategory } from '../types';
+import type { Exercise, ExerciseCategory } from '../types';
 
 /**
  * The shared exercise library everyone builds programs and logs sets from.
@@ -49,7 +49,7 @@ export function ExerciseLibrary() {
           <h3 style={{ marginBottom: '.3rem' }}>{muscle}</h3>
           <div className="row" style={{ gap: '.4rem' }}>
             {list.map((ex) => (
-              <span key={ex.id} className="tag" title={ex.discipline}>
+              <span key={ex.id} className="tag">
                 {ex.name}
                 {ex.isCompetitionLift && ' 🏆'}
               </span>
@@ -248,7 +248,6 @@ function groupByMuscle(exercises: Exercise[]): Record<string, Exercise[]> {
 function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<ExerciseCategory>('COMPOUND');
-  const [discipline, setDiscipline] = useState<Discipline>('BOTH');
   const [primaryMuscle, setPrimaryMuscle] = useState('');
   const [isCompetitionLift, setIsCompetitionLift] = useState(false);
   const [error, setError] = useState<string>();
@@ -263,7 +262,7 @@ function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
     }
     setBusy(true);
     try {
-      await api.createExercise({ name, category, discipline, primaryMuscle, isCompetitionLift });
+      await api.createExercise({ name, category, primaryMuscle, isCompetitionLift });
       setName('');
       setPrimaryMuscle('');
       setIsCompetitionLift(false);
@@ -299,17 +298,6 @@ function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
           >
             <option value="COMPOUND">Compound</option>
             <option value="ISOLATION">Isolation</option>
-          </select>
-        </div>
-        <div>
-          <label>Discipline</label>
-          <select
-            value={discipline}
-            onChange={(e) => setDiscipline(e.target.value as Discipline)}
-          >
-            <option value="BOTH">Both</option>
-            <option value="POWERLIFTING">Powerlifting</option>
-            <option value="BODYBUILDING">Bodybuilding</option>
           </select>
         </div>
         <div style={{ flex: '0 0 auto' }}>

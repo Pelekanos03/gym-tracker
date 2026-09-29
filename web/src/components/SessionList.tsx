@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { WorkoutSession } from '../types';
 import { SET_TYPE_LABELS } from '../types';
 import { SessionEditor } from './SessionEditor';
+
+/** Drops / superset partners in the order they were done (the API doesn't guarantee it). */
+function byOrder<T extends { orderIndex: number }>(items: T[] | undefined): T[] {
+  return [...(items ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
+}
 
 /** Read-only render of logged sessions and their sets, with optional edit/delete. */
 export function SessionList({
@@ -25,9 +30,18 @@ export function SessionList({
   return (
     <>
       {sessions.map((s) => {
-        // Matches the backend rule: every set type counts toward volume except warm-ups.
+        // Matches the backend rule: every set type counts toward volume except
+        // warm-ups, and drops / superset partners count on top of their set.
         const countsTowardVolume = s.sets.filter((set) => set.setType !== 'WARMUP');
-        const volume = countsTowardVolume.reduce((sum, x) => sum + x.weight * x.reps, 0);
+        const volume = countsTowardVolume.reduce(
+          (sum, x) =>
+            sum +
+            [x, ...(x.drops ?? []), ...(x.supersetPartners ?? [])].reduce(
+              (v, part) => v + part.weight * part.reps,
+              0,
+            ),
+          0,
+        );
         return (
           <div
             key={s.id}
@@ -115,18 +129,38 @@ export function SessionList({
                 </thead>
                 <tbody>
                   {s.sets.map((set) => (
-                    <tr key={set.id}>
-                      <td>
-                        {set.exercise.name}
-                        {set.setType !== 'WORKING' && (
-                          <span className="muted"> ({SET_TYPE_LABELS[set.setType].toLowerCase()})</span>
-                        )}
-                      </td>
-                      <td>{set.setNumber}</td>
-                      <td>{set.weight} kg</td>
-                      <td>{set.reps}</td>
-                      <td>{set.rpe ?? '—'}</td>
-                    </tr>
+                    <Fragment key={set.id}>
+                      <tr>
+                        <td>
+                          {set.exercise.name}
+                          {set.setType !== 'WORKING' && (
+                            <span className="muted"> ({SET_TYPE_LABELS[set.setType].toLowerCase()})</span>
+                          )}
+                        </td>
+                        <td>{set.setNumber}</td>
+                        <td>{set.weight} kg</td>
+                        <td>{set.reps}</td>
+                        <td>{set.rpe ?? '—'}</td>
+                      </tr>
+                      {byOrder(set.drops).map((d) => (
+                        <tr key={d.id} className="muted">
+                          <td style={{ paddingLeft: '1.5rem' }}>↳ drop {d.orderIndex}</td>
+                          <td />
+                          <td>{d.weight} kg</td>
+                          <td>{d.reps}</td>
+                          <td />
+                        </tr>
+                      ))}
+                      {byOrder(set.supersetPartners).map((p) => (
+                        <tr key={p.id} className="muted">
+                          <td style={{ paddingLeft: '1.5rem' }}>↳ + {p.exercise.name}</td>
+                          <td />
+                          <td>{p.weight} kg</td>
+                          <td>{p.reps}</td>
+                          <td />
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

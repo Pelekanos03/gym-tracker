@@ -11,7 +11,6 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Discipline } from '../../common/enums';
 import { ProgramDayInput } from './create-program.dto';
 
 export class UpdateProgramDto {
@@ -26,10 +25,6 @@ export class UpdateProgramDto {
   @IsOptional()
   @IsString()
   description?: string;
-
-  @IsOptional()
-  @IsEnum(Discipline)
-  discipline?: Discipline;
 
   @IsOptional()
   @IsInt()

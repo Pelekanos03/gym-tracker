@@ -9,6 +9,9 @@ import { ProgramExercise } from '../domain/program-exercise.entity';
 import { ProgramShare } from '../domain/program-share.entity';
 import { WorkoutSession } from '../domain/workout-session.entity';
 import { SetLog } from '../domain/set-log.entity';
+import { SetDrop } from '../domain/set-drop.entity';
+import { SupersetPartner } from '../domain/superset-partner.entity';
+import { TrainingBlock } from '../domain/training-block.entity';
 
 /**
  * Single source of truth for the DB connection, shared by the Nest app and
@@ -29,6 +32,9 @@ export const dataSourceOptions: DataSourceOptions = {
     ProgramShare,
     WorkoutSession,
     SetLog,
+    SetDrop,
+    SupersetPartner,
+    TrainingBlock,
   ],
   // Dev only: auto-create tables from entities. Use migrations in production.
   synchronize: true,

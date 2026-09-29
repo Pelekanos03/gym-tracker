@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryGeneratedColumn, Unique } from 'typeorm';
-import { Discipline, ExerciseCategory } from '../common/enums';
+import { ExerciseCategory } from '../common/enums';
 
 /**
  * A movement in the exercise library (Back Squat, Bench Press, Barbell Row, ...).
@@ -16,9 +16,6 @@ export class Exercise {
 
   @Column({ type: 'varchar', enum: ExerciseCategory })
   category: ExerciseCategory;
-
-  @Column({ type: 'varchar', enum: Discipline, default: Discipline.BOTH })
-  discipline: Discipline;
 
   /** Primary muscle group, free text for now e.g. "Quads", "Chest", "Back". */
   @Column({ name: 'primary_muscle' })

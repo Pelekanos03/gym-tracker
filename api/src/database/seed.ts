@@ -4,12 +4,20 @@ import { dataSourceOptions } from './data-source-options';
 import { Exercise } from '../domain/exercise.entity';
 import { User } from '../domain/user.entity';
 import { Friendship } from '../domain/friendship.entity';
+import { Coaching } from '../domain/coaching.entity';
 import { Program } from '../domain/program.entity';
 import { ProgramDay } from '../domain/program-day.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
+import { ProgramShare } from '../domain/program-share.entity';
 import { WorkoutSession } from '../domain/workout-session.entity';
 import { SetLog } from '../domain/set-log.entity';
-import { Discipline, ExerciseCategory, FriendshipStatus, SessionStatus, SetType } from '../common/enums';
+import {
+  CoachingStatus,
+  ExerciseCategory,
+  FriendshipStatus,
+  SessionStatus,
+  SetType,
+} from '../common/enums';
 import { hashPassword } from '../common/password';
 
 /**
@@ -20,24 +28,24 @@ import { hashPassword } from '../common/password';
  * Run with:  npm run seed --workspace api
  */
 const EXERCISES: Partial<Exercise>[] = [
-  { name: 'Back Squat', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Quads', isCompetitionLift: true },
-  { name: 'Bench Press', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Chest', isCompetitionLift: true },
-  { name: 'Deadlift', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Posterior Chain', isCompetitionLift: true },
-  { name: 'Overhead Press', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Shoulders' },
-  { name: 'Front Squat', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Quads' },
-  { name: 'Romanian Deadlift', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Hamstrings' },
-  { name: 'Barbell Row', category: ExerciseCategory.COMPOUND, discipline: Discipline.BOTH, primaryMuscle: 'Back' },
-  { name: 'Pull-Up', category: ExerciseCategory.COMPOUND, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Back' },
-  { name: 'Incline Dumbbell Press', category: ExerciseCategory.COMPOUND, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Chest' },
-  { name: 'Leg Press', category: ExerciseCategory.COMPOUND, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Quads' },
-  { name: 'Lat Pulldown', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Back' },
-  { name: 'Dumbbell Curl', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Biceps' },
-  { name: 'Triceps Pushdown', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Triceps' },
-  { name: 'Lateral Raise', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Shoulders' },
-  { name: 'Leg Curl', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Hamstrings' },
-  { name: 'Leg Extension', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Quads' },
-  { name: 'Calf Raise', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Calves' },
-  { name: 'Face Pull', category: ExerciseCategory.ISOLATION, discipline: Discipline.BODYBUILDING, primaryMuscle: 'Rear Delts' },
+  { name: 'Back Squat', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads', isCompetitionLift: true },
+  { name: 'Bench Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Chest', isCompetitionLift: true },
+  { name: 'Deadlift', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Posterior Chain', isCompetitionLift: true },
+  { name: 'Overhead Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Shoulders' },
+  { name: 'Front Squat', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads' },
+  { name: 'Romanian Deadlift', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Hamstrings' },
+  { name: 'Barbell Row', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Back' },
+  { name: 'Pull-Up', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Back' },
+  { name: 'Incline Dumbbell Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Chest' },
+  { name: 'Leg Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads' },
+  { name: 'Lat Pulldown', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Back' },
+  { name: 'Dumbbell Curl', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Biceps' },
+  { name: 'Triceps Pushdown', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Triceps' },
+  { name: 'Lateral Raise', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Shoulders' },
+  { name: 'Leg Curl', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Hamstrings' },
+  { name: 'Leg Extension', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Quads' },
+  { name: 'Calf Raise', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Calves' },
+  { name: 'Face Pull', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Rear Delts' },
 ];
 
 async function run() {
@@ -104,6 +112,36 @@ async function run() {
   await friendIfMissing(sam, priya);
   await friendIfMissing(jordan, priya, FriendshipStatus.PENDING);
 
+  // --- Coaching: an elevated permission layered on an existing friendship
+  // (coach sees history + programs; a plain friend only sees progress).
+  const coachingRepo = dataSource.getRepository(Coaching);
+  async function coachIfMissing(
+    coach: User,
+    client: User,
+    status: CoachingStatus = CoachingStatus.ACCEPTED,
+  ) {
+    const existing = await coachingRepo.findOne({
+      where: { coach: { id: coach.id }, client: { id: client.id } },
+    });
+    if (existing) return;
+    await coachingRepo.save(
+      coachingRepo.create({
+        coach,
+        client,
+        status,
+        respondedAt: status === CoachingStatus.ACCEPTED ? new Date() : null,
+      }),
+    );
+    console.log(
+      status === CoachingStatus.ACCEPTED
+        ? `${coach.name} is now coaching ${client.name}.`
+        : `${coach.name} asked to coach ${client.name}.`,
+    );
+  }
+
+  await coachIfMissing(alex, sam);
+  await coachIfMissing(sam, priya, CoachingStatus.PENDING);
+
   const programRepo = dataSource.getRepository(Program);
   const byName = new Map((await exerciseRepo.find()).map((e) => [e.name, e]));
 
@@ -122,7 +160,6 @@ async function run() {
     owner: User,
     name: string,
     description: string,
-    discipline: Discipline,
     lengthWeeks: number,
     days: ProgramDay[],
   ) {
@@ -131,7 +168,6 @@ async function run() {
     const program = new Program();
     program.name = name;
     program.description = description;
-    program.discipline = discipline;
     program.lengthWeeks = lengthWeeks;
     program.owner = owner;
     program.days = days;
@@ -140,7 +176,7 @@ async function run() {
     return saved;
   }
 
-  await createProgramIfMissing(alex, 'Starter Strength', 'A simple full-body strength template.', Discipline.POWERLIFTING, 4, [
+  await createProgramIfMissing(alex, 'Starter Strength', 'A simple full-body strength template.', 4, [
     day(1, 1, 'Full Body A', [
       { exercise: byName.get('Back Squat'), targetSets: 5, targetReps: 5, targetRpe: 7 },
       { exercise: byName.get('Bench Press'), targetSets: 5, targetReps: 5, targetRpe: 7 },
@@ -152,7 +188,6 @@ async function run() {
     alex,
     '5/3/1 Block',
     'Classic 3-day powerlifting split, one main lift per day.',
-    Discipline.POWERLIFTING,
     4,
     [
       day(1, 1, 'Squat Day', [
@@ -177,7 +212,6 @@ async function run() {
     sam,
     'Push Pull Legs',
     'A 3-day bodybuilding split for hypertrophy.',
-    Discipline.BODYBUILDING,
     6,
     [
       day(1, 1, 'Push', [
@@ -208,7 +242,6 @@ async function run() {
     jordan,
     'Full Body Basics',
     'Three full-body sessions a week to build the habit.',
-    Discipline.BOTH,
     4,
     [
       day(1, 1, 'Full Body A', [
@@ -218,6 +251,21 @@ async function run() {
       ]),
     ],
   );
+
+  // --- Sharing: a friend can view and log against a shared program without
+  // ever owning a copy of it. Separately, a coach can send a client a real,
+  // independently-editable copy (see programs.service.ts `copy`).
+  const programShareRepo = dataSource.getRepository(ProgramShare);
+  async function shareIfMissing(program: Program, friend: User) {
+    const existing = await programShareRepo.findOne({
+      where: { program: { id: program.id }, sharedWith: { id: friend.id } },
+    });
+    if (existing) return;
+    await programShareRepo.save(programShareRepo.create({ program, sharedWith: friend }));
+    console.log(`Shared "${program.name}" with ${friend.name}.`);
+  }
+
+  await shareIfMissing(fiveThreeOne!, jordan);
 
   // --- Workout history: give a couple of the seeded users a realistic
   // training log so Progress/History views have something to render. New

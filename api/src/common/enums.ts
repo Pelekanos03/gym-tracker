@@ -3,13 +3,6 @@
  * Keeping them in one place means every entity and DTO speaks the same language.
  */
 
-/** Broad training focus. An exercise (or program) can serve one or both. */
-export enum Discipline {
-  POWERLIFTING = 'POWERLIFTING',
-  BODYBUILDING = 'BODYBUILDING',
-  BOTH = 'BOTH',
-}
-
 /** Compound lifts drive strength; isolation work drives hypertrophy. */
 export enum ExerciseCategory {
   COMPOUND = 'COMPOUND',
@@ -52,4 +45,10 @@ export enum SetType {
   SUPERSET = 'SUPERSET',
   BACKOFF = 'BACKOFF',
   AMRAP = 'AMRAP',
+}
+
+/** Whether a training block is still being run, or has been finished/ended by the user. */
+export enum BlockStatus {
+  ACTIVE = 'ACTIVE',
+  FINISHED = 'FINISHED',
 }

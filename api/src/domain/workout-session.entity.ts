@@ -10,6 +10,7 @@ import { SessionStatus, SetType } from '../common/enums';
 import { User } from './user.entity';
 import { ProgramDay } from './program-day.entity';
 import { SetLog } from './set-log.entity';
+import { TrainingBlock } from './training-block.entity';
 
 /**
  * One training session a user actually did (or was scheduled to do).
@@ -30,6 +31,20 @@ export class WorkoutSession {
   @ManyToOne(() => ProgramDay, { nullable: true, eager: true, onDelete: 'SET NULL' })
   programDay: ProgramDay | null;
 
+  /** The training block this session was logged as part of, if any. */
+  @ManyToOne(() => TrainingBlock, (block) => block.sessions, { nullable: true, onDelete: 'SET NULL' })
+  block: TrainingBlock | null;
+
+  /**
+   * Which week/day of the block this session covered. Stored as numbers,
+   * not a ProgramDay link, so progress survives the program being edited.
+   */
+  @Column({ name: 'block_week', type: 'int', nullable: true })
+  blockWeek: number | null;
+
+  @Column({ name: 'block_day', type: 'int', nullable: true })
+  blockDay: number | null;
+
   @Column({ type: 'date' })
   date: string;
 
@@ -47,11 +62,12 @@ export class WorkoutSession {
 
   /**
    * Total weight moved in the session (kg). Everything counts except
-   * warm-ups — drop sets and supersets are real working volume too.
+   * warm-ups — drop sets and supersets (including each drop and superset
+   * partner) are real working volume too.
    */
   totalVolume(): number {
     return (this.sets ?? [])
       .filter((s) => s.setType !== SetType.WARMUP)
-      .reduce((sum, s) => sum + s.weight * s.reps, 0);
+      .reduce((sum, s) => sum + s.volume(), 0);
   }
 }

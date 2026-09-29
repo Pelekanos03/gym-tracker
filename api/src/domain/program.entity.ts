@@ -1,4 +1,5 @@
 import {
+  AfterLoad,
   Column,
   CreateDateColumn,
   Entity,
@@ -6,7 +7,6 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Discipline } from '../common/enums';
 import { User } from './user.entity';
 import { ProgramDay } from './program-day.entity';
 
@@ -26,9 +26,6 @@ export class Program {
   @Column({ default: '' })
   description: string;
 
-  @Column({ type: 'varchar', enum: Discipline, default: Discipline.BOTH })
-  discipline: Discipline;
-
   @Column({ name: 'length_weeks', default: 4 })
   lengthWeeks: number;
 
@@ -46,4 +43,13 @@ export class Program {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  /**
+   * The database hands relations back in no particular order, so put the
+   * days in training order (week, then day) every time a program is loaded.
+   */
+  @AfterLoad()
+  sortDays(): void {
+    this.days?.sort((a, b) => a.weekNumber - b.weekNumber || a.dayNumber - b.dayNumber);
+  }
 }

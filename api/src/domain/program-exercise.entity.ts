@@ -6,6 +6,7 @@ import {
 } from 'typeorm';
 import { Exercise } from './exercise.entity';
 import { ProgramDay } from './program-day.entity';
+import { SetType } from '../common/enums';
 
 /**
  * A single prescribed line on a training day:
@@ -44,6 +45,13 @@ export class ProgramExercise {
   /** Exact prescribed load in kg — how a coach sends a client a concrete number instead of RPE/%1RM. */
   @Column({ name: 'target_weight', type: 'float', nullable: true })
   targetWeight: number | null;
+
+  /**
+   * What role these sets play — e.g. a top set (WORKING) followed by
+   * lighter BACKOFF lines. Carried over to the sets when a day is logged.
+   */
+  @Column({ name: 'set_type', type: 'varchar', enum: SetType, default: SetType.WORKING })
+  setType: SetType;
 
   @Column({ default: '' })
   notes: string;

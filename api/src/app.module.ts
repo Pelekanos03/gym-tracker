@@ -11,6 +11,7 @@ import { ExercisesModule } from './exercises/exercises.module';
 import { ProgramsModule } from './programs/programs.module';
 import { WorkoutsModule } from './workouts/workouts.module';
 import { ProgressModule } from './progress/progress.module';
+import { BlocksModule } from './blocks/blocks.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ProgressModule } from './progress/progress.module';
     ProgramsModule,
     WorkoutsModule,
     ProgressModule,
+    BlocksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

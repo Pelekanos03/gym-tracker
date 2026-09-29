@@ -35,7 +35,6 @@ describe('ProgramsService', () => {
     program.id = 'prog1';
     program.name = 'Starter Strength';
     program.description = '';
-    program.discipline = 'POWERLIFTING' as any;
     program.lengthWeeks = 4;
     program.owner = alex;
     program.days = [day];

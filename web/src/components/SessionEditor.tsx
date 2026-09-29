@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import type { SetType, WorkoutSession } from '../types';
 import { SET_TYPE_LABELS } from '../types';
+import {
+  DropRows,
+  SupersetRows,
+  dropsPayload,
+  emptyDrop,
+  emptyPartner,
+  partnersPayload,
+  type DropEntry,
+  type PartnerEntry,
+} from './SetExtras';
 
 const SET_TYPES: SetType[] = ['WORKING', 'WARMUP', 'DROP_SET', 'SUPERSET', 'BACKOFF', 'AMRAP'];
 
@@ -12,6 +22,8 @@ interface SetRow {
   reps: string;
   rpe: string;
   setType: SetType;
+  drops: DropEntry[];
+  supersetPartners: PartnerEntry[];
 }
 
 function rowsFromSession(session: WorkoutSession): SetRow[] {
@@ -21,6 +33,12 @@ function rowsFromSession(session: WorkoutSession): SetRow[] {
     reps: String(s.reps),
     rpe: s.rpe != null ? String(s.rpe) : '',
     setType: s.setType,
+    drops: [...(s.drops ?? [])]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((d) => ({ weight: String(d.weight), reps: String(d.reps) })),
+    supersetPartners: [...(s.supersetPartners ?? [])]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((p) => ({ exerciseId: p.exercise.id, weight: String(p.weight), reps: String(p.reps) })),
   }));
 }
 
@@ -45,6 +63,17 @@ export function SessionEditor({
 
   function update(i: number, patch: Partial<SetRow>) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+
+  /** Switching a set to "Drop set" or "Superset" opens one empty sub-row straight away. */
+  function changeSetType(i: number, setType: SetType) {
+    const r = rows[i];
+    update(i, {
+      setType,
+      drops: setType === 'DROP_SET' && r.drops.length === 0 ? [emptyDrop()] : r.drops,
+      supersetPartners:
+        setType === 'SUPERSET' && r.supersetPartners.length === 0 ? [emptyPartner()] : r.supersetPartners,
+    });
   }
 
   async function submit(e: React.FormEvent) {
@@ -74,6 +103,9 @@ export function SessionEditor({
             reps: Number(r.reps),
             rpe: r.rpe ? Number(r.rpe) : undefined,
             setType: r.setType,
+            drops: r.setType === 'DROP_SET' ? dropsPayload(r.drops) : undefined,
+            supersetPartners:
+              r.setType === 'SUPERSET' ? partnersPayload(r.supersetPartners) : undefined,
           };
         }),
       });
@@ -120,7 +152,8 @@ export function SessionEditor({
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <Fragment key={i}>
+            <tr>
               <td>
                 <select
                   value={r.exerciseId}
@@ -167,7 +200,7 @@ export function SessionEditor({
               <td>
                 <select
                   value={r.setType}
-                  onChange={(e) => update(i, { setType: e.target.value as SetType })}
+                  onChange={(e) => changeSetType(i, e.target.value as SetType)}
                   style={{ minWidth: 110 }}
                 >
                   {SET_TYPES.map((t) => (
@@ -189,6 +222,22 @@ export function SessionEditor({
                 </button>
               </td>
             </tr>
+            {(r.setType === 'DROP_SET' || r.setType === 'SUPERSET') && (
+              <tr>
+                <td colSpan={6}>
+                  {r.setType === 'DROP_SET' ? (
+                    <DropRows drops={r.drops} onChange={(drops) => update(i, { drops })} />
+                  ) : (
+                    <SupersetRows
+                      partners={r.supersetPartners}
+                      exercises={exercises.data ?? []}
+                      onChange={(supersetPartners) => update(i, { supersetPartners })}
+                    />
+                  )}
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -201,7 +250,7 @@ export function SessionEditor({
           onClick={() =>
             setRows((rs) => [
               ...rs,
-              { exerciseId: '', weight: '', reps: '', rpe: '', setType: 'WORKING' },
+              { exerciseId: '', weight: '', reps: '', rpe: '', setType: 'WORKING', drops: [], supersetPartners: [] },
             ])
           }
         >

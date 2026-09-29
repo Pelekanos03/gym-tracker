@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Exercise } from '../domain/exercise.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
 import { SetLog } from '../domain/set-log.entity';
+import { SupersetPartner } from '../domain/superset-partner.entity';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 
 export interface ExerciseMergePreview {
@@ -20,6 +21,8 @@ export class ExercisesService {
     private readonly programExercises: Repository<ProgramExercise>,
     @InjectRepository(SetLog)
     private readonly setLogs: Repository<SetLog>,
+    @InjectRepository(SupersetPartner)
+    private readonly supersetPartners: Repository<SupersetPartner>,
   ) {}
 
   findAll(): Promise<Exercise[]> {
@@ -52,11 +55,13 @@ export class ExercisesService {
    */
   async mergePreview(keepId: string, mergeId: string): Promise<ExerciseMergePreview> {
     await this.assertMergeable(keepId, mergeId);
-    const [programExerciseCount, setLogCount] = await Promise.all([
+    const [programExerciseCount, setLogCount, supersetPartnerCount] = await Promise.all([
       this.programExercises.count({ where: { exercise: { id: mergeId } } }),
       this.setLogs.count({ where: { exercise: { id: mergeId } } }),
+      this.supersetPartners.count({ where: { exercise: { id: mergeId } } }),
     ]);
-    return { programExerciseCount, setLogCount };
+    // A superset partner is a logged set too, just stored alongside its main set.
+    return { programExerciseCount, setLogCount: setLogCount + supersetPartnerCount };
   }
 
   /**
@@ -75,6 +80,10 @@ export class ExercisesService {
         mergeId,
       ]);
       await manager.query('UPDATE set_logs SET exerciseId = ? WHERE exerciseId = ?', [
+        keepId,
+        mergeId,
+      ]);
+      await manager.query('UPDATE superset_partners SET exerciseId = ? WHERE exerciseId = ?', [
         keepId,
         mergeId,
       ]);

@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
-import { Discipline, ExerciseCategory } from '../../common/enums';
+import { ExerciseCategory } from '../../common/enums';
 
 export class CreateExerciseDto {
   @IsString()
@@ -8,10 +8,6 @@ export class CreateExerciseDto {
 
   @IsEnum(ExerciseCategory)
   category: ExerciseCategory;
-
-  @IsEnum(Discipline)
-  @IsOptional()
-  discipline?: Discipline;
 
   @IsString()
   primaryMuscle: string;

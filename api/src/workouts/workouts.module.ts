@@ -8,6 +8,7 @@ import { WorkoutsController } from './workouts.controller';
 import { UsersModule } from '../users/users.module';
 import { ExercisesModule } from '../exercises/exercises.module';
 import { CoachingModule } from '../coaching/coaching.module';
+import { BlocksModule } from '../blocks/blocks.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CoachingModule } from '../coaching/coaching.module';
     UsersModule,
     ExercisesModule,
     CoachingModule,
+    BlocksModule,
   ],
   providers: [WorkoutsService],
   controllers: [WorkoutsController],

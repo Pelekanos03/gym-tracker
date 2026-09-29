@@ -1,6 +1,5 @@
 // Mirrors the shapes the NestJS API returns. Kept deliberately small.
 
-export type Discipline = 'POWERLIFTING' | 'BODYBUILDING' | 'BOTH';
 export type ExerciseCategory = 'COMPOUND' | 'ISOLATION';
 
 /**
@@ -30,7 +29,6 @@ export interface Exercise {
   id: string;
   name: string;
   category: ExerciseCategory;
-  discipline: Discipline;
   primaryMuscle: string;
   isCompetitionLift: boolean;
 }
@@ -80,6 +78,7 @@ export interface ProgramExercise {
   targetRpe: number | null;
   targetPercent1rm: number | null;
   targetWeight: number | null;
+  setType: SetType;
   notes: string;
 }
 
@@ -95,11 +94,27 @@ export interface Program {
   id: string;
   name: string;
   description: string;
-  discipline: Discipline;
   lengthWeeks: number;
   owner: User;
   days: ProgramDay[];
   createdAt: string;
+}
+
+/** One drop after the top set of a drop set. */
+export interface SetDrop {
+  id: string;
+  orderIndex: number;
+  weight: number;
+  reps: number;
+}
+
+/** The other exercise done back-to-back with a superset set. */
+export interface SupersetPartner {
+  id: string;
+  exercise: Exercise;
+  orderIndex: number;
+  weight: number;
+  reps: number;
 }
 
 export interface SetLog {
@@ -110,6 +125,10 @@ export interface SetLog {
   reps: number;
   rpe: number | null;
   setType: SetType;
+  /** Only a DROP_SET has any. */
+  drops: SetDrop[];
+  /** Only a SUPERSET has any. */
+  supersetPartners: SupersetPartner[];
 }
 
 export interface WorkoutSession {
@@ -135,4 +154,30 @@ export interface ExerciseProgress {
   exerciseName: string;
   points: ProgressPoint[];
   allTimeBestE1rm: number;
+}
+
+export type BlockDayStatus = 'DONE' | 'TODO';
+
+/** One day of a training block and where the user stands on it. */
+export interface BlockDay {
+  week: number;
+  day: number;
+  programDayId: string;
+  name: string;
+  status: BlockDayStatus;
+  doneOn: string | null;
+}
+
+/**
+ * A run of a program. Not calendar-based: days can be trained in any
+ * order; `next` suggests where the user left off.
+ */
+export interface TrainingBlock {
+  id: string;
+  status: 'ACTIVE' | 'FINISHED';
+  startedOn: string;
+  endedOn: string | null;
+  program: { id: string; name: string; owner: { id: string; name: string } };
+  days: BlockDay[];
+  next: BlockDay | null;
 }

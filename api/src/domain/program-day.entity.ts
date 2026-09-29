@@ -1,4 +1,5 @@
 import {
+  AfterLoad,
   Column,
   Entity,
   ManyToOne,
@@ -35,4 +36,10 @@ export class ProgramDay {
     eager: true,
   })
   exercises: ProgramExercise[];
+
+  /** Exercises in the order they're done that day, however the database returned them. */
+  @AfterLoad()
+  sortExercises(): void {
+    this.exercises?.sort((a, b) => a.orderIndex - b.orderIndex);
+  }
 }

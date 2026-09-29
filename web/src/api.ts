@@ -7,6 +7,7 @@ import type {
   FriendEntry,
   FriendRequest,
   Program,
+  TrainingBlock,
   User,
   WorkoutSession,
 } from './types';
@@ -22,7 +23,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message ?? `${res.status} ${res.statusText}`);
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+  // An empty body (204, or a handler returning null) comes back as null.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 /**
@@ -43,7 +46,6 @@ export const api = {
   createExercise: (data: {
     name: string;
     category: string;
-    discipline?: string;
     primaryMuscle: string;
     isCompetitionLift?: boolean;
   }) => request<Exercise>('/exercises', { method: 'POST', body: JSON.stringify(data) }),
@@ -169,6 +171,21 @@ export const api = {
 
   programShares: (programId: string) =>
     request<{ id: string; sharedWith: User }[]>(`/programs/${programId}/shares`),
+
+  activeBlock: (userId: string) =>
+    request<TrainingBlock | null>(`/users/${userId}/training-blocks/active`),
+
+  startBlock: (userId: string, programId: string) =>
+    request<TrainingBlock>('/training-blocks', {
+      method: 'POST',
+      body: JSON.stringify({ userId, programId }),
+    }),
+
+  endBlock: (blockId: string, userId: string) =>
+    request<TrainingBlock>(`/training-blocks/${blockId}/end`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
 
   sharedPrograms: (userId: string) => request<Program[]>(`/users/${userId}/shared-programs`),
 

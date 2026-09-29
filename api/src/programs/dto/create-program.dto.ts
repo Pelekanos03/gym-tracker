@@ -12,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Discipline } from '../../common/enums';
+import { SetType } from '../../common/enums';
 
 export class ProgramExerciseInput {
   @IsUUID()
@@ -49,6 +49,10 @@ export class ProgramExerciseInput {
   targetWeight?: number;
 
   @IsOptional()
+  @IsEnum(SetType)
+  setType?: SetType;
+
+  @IsOptional()
   @IsString()
   notes?: string;
 }
@@ -83,10 +87,6 @@ export class CreateProgramDto {
   @IsOptional()
   @IsString()
   description?: string;
-
-  @IsOptional()
-  @IsEnum(Discipline)
-  discipline?: Discipline;
 
   @IsOptional()
   @IsInt()

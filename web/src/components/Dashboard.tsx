@@ -1,13 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
-import type { Program, ProgramDay, SetType, User, WorkoutSession } from '../types';
+import type {
+  BlockDay,
+  Program,
+  ProgramDay,
+  SetType,
+  TrainingBlock,
+  User,
+  WorkoutSession,
+} from '../types';
 import { SET_TYPE_LABELS } from '../types';
 import { ProgramBuilder } from './ProgramBuilder';
 import { FriendsPanel } from './FriendsPanel';
 import { SessionList } from './SessionList';
 import { ProgressPanel } from './ProgressPanel';
 import { ExerciseLibrary } from './ExerciseLibrary';
+import { BlockPicker } from './BlockPicker';
+import {
+  DropRows,
+  SupersetRows,
+  dropsPayload,
+  emptyDrop,
+  emptyPartner,
+  partnersPayload,
+  type DropEntry,
+  type PartnerEntry,
+} from './SetExtras';
 
 type Tab = 'log' | 'history' | 'progress' | 'programs' | 'friends';
 
@@ -268,7 +287,6 @@ function ProgramList({
             <td>
               <strong>{p.name}</strong>
               <br />
-              <span className="tag">{p.discipline}</span>{' '}
               <span className="muted">{p.lengthWeeks} wk</span>
             </td>
             <td>{p.days.length}</td>
@@ -318,6 +336,12 @@ interface SetEntry {
   setType: SetType;
   /** Ticked once the lifter has actually done this set. Weight is optional either way. */
   done: boolean;
+  /**
+   * Only sent when setType is DROP_SET / SUPERSET respectively; kept
+   * otherwise so a mis-click on the type doesn't lose what was typed.
+   */
+  drops: DropEntry[];
+  supersetPartners: PartnerEntry[];
 }
 
 /** One box in the log-workout form: an exercise and just its own sets. */
@@ -332,6 +356,8 @@ const emptySetEntry: SetEntry = {
   rpe: '',
   setType: 'WORKING',
   done: true,
+  drops: [],
+  supersetPartners: [],
 };
 
 const SET_TYPES: SetType[] = ['WORKING', 'WARMUP', 'DROP_SET', 'SUPERSET', 'BACKOFF', 'AMRAP'];
@@ -372,8 +398,9 @@ function LogWorkoutForm({
   const [notes, setNotes] = useState('');
   const [groups, setGroups] = useState<ExerciseGroup[]>([emptyGroup()]);
   const [programDayId, setProgramDayId] = useState<string>();
-  const [planProgramId, setPlanProgramId] = useState('');
-  const [planDayId, setPlanDayId] = useState('');
+  /** Set when the loaded day came from the running block, so logging counts toward it. */
+  const [blockDay, setBlockDay] = useState<{ blockId: string; day: BlockDay }>();
+  const activeBlock = useAsync(() => api.activeBlock(userId), [userId]);
   const [error, setError] = useState<string>();
   const [ok, setOk] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -384,11 +411,6 @@ function LogWorkoutForm({
   const followablePrograms = useMemo(
     () => [...(myPrograms.data ?? []), ...(sharedPrograms.data ?? [])],
     [myPrograms.data, sharedPrograms.data],
-  );
-
-  const planDays = useMemo<ProgramDay[]>(
-    () => followablePrograms.find((p) => p.id === planProgramId)?.days ?? [],
-    [followablePrograms, planProgramId],
   );
 
   const lastByExercise = useMemo(() => lastSetByExercise(history, 'WORKING'), [history]);
@@ -402,6 +424,19 @@ function LogWorkoutForm({
           : g,
       ),
     );
+  }
+
+  /** Switching a set to "Drop set" or "Superset" opens one empty sub-row straight away, ready to fill in. */
+  function changeSetType(gi: number, si: number, setType: SetType) {
+    const current = groups[gi].sets[si];
+    updateSet(gi, si, {
+      setType,
+      drops: setType === 'DROP_SET' && current.drops.length === 0 ? [emptyDrop()] : current.drops,
+      supersetPartners:
+        setType === 'SUPERSET' && current.supersetPartners.length === 0
+          ? [emptyPartner()]
+          : current.supersetPartners,
+    });
   }
 
   /** Picking an exercise on a box with no weight/reps yet fills in what was last used, so you can see (and tweak) it instead of guessing. */
@@ -467,9 +502,21 @@ function LogWorkoutForm({
     setGroups((gs) => [...gs, emptyGroup()]);
   }
 
-  function loadPlan() {
-    const day = planDays.find((d) => d.id === planDayId);
-    if (!day) return;
+  /** Loads a day from the running block into the form; logging it then ticks it off. */
+  function trainBlockDay(block: TrainingBlock, day: BlockDay) {
+    const programDay = followablePrograms
+      .find((p) => p.id === block.program.id)
+      ?.days.find((d) => d.id === day.programDayId);
+    if (!programDay) {
+      setError("Couldn't load that day — the program may no longer be shared with you.");
+      return;
+    }
+    loadDay(programDay);
+    setBlockDay({ blockId: block.id, day });
+  }
+
+  /** Fills the form with a planned day's prescribed sets. */
+  function loadDay(day: ProgramDay) {
     const loaded: ExerciseGroup[] = [];
     for (const pe of [...day.exercises].sort((a, b) => a.orderIndex - b.orderIndex)) {
       const last = lastByExercise.get(pe.exercise.id);
@@ -480,11 +527,17 @@ function LogWorkoutForm({
           weight: pe.targetWeight != null ? String(pe.targetWeight) : last ? String(last.weight) : '',
           reps: String(pe.targetReps),
           rpe: pe.targetRpe != null ? String(pe.targetRpe) : '',
-          setType: 'WORKING',
+          setType: pe.setType ?? 'WORKING',
           done: false,
+          drops: [],
+          supersetPartners: [],
         });
       }
-      loaded.push({ exerciseId: pe.exercise.id, sets });
+      // Consecutive lines of the same exercise (e.g. a top set followed by
+      // its back-offs) belong in one box, not one box per line.
+      const previous = loaded[loaded.length - 1];
+      if (previous?.exerciseId === pe.exercise.id) previous.sets.push(...sets);
+      else loaded.push({ exerciseId: pe.exercise.id, sets });
     }
     setGroups(loaded.length > 0 ? loaded : [emptyGroup()]);
     setProgramDayId(day.id);
@@ -495,8 +548,7 @@ function LogWorkoutForm({
   function clearPlan() {
     setGroups([emptyGroup()]);
     setProgramDayId(undefined);
-    setPlanProgramId('');
-    setPlanDayId('');
+    setBlockDay(undefined);
   }
 
   // Sets marked "done" with reps filled in — the same rule save() uses to
@@ -524,6 +576,7 @@ function LogWorkoutForm({
       await api.logSession({
         userId,
         programDayId,
+        blockId: blockDay?.blockId,
         date,
         notes: notes || undefined,
         status: 'COMPLETED',
@@ -535,13 +588,17 @@ function LogWorkoutForm({
             reps: Number(s.reps),
             rpe: s.rpe ? Number(s.rpe) : undefined,
             setType: s.setType,
+            drops: s.setType === 'DROP_SET' ? dropsPayload(s.drops) : undefined,
+            supersetPartners:
+              s.setType === 'SUPERSET' ? partnersPayload(s.supersetPartners) : undefined,
           })),
         ),
       });
       clearPlan();
       setNotes('');
-      setOk('Session logged.');
+      setOk(blockDay ? `Session logged — Week ${blockDay.day.week} · ${blockDay.day.name} ticked off.` : 'Session logged.');
       onLogged();
+      activeBlock.reload();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -619,53 +676,24 @@ function LogWorkoutForm({
         </div>
       )}
 
-      {followablePrograms.length > 0 && (
-        <div className="row" style={{ marginBottom: '.75rem', alignItems: 'flex-end' }}>
-          <div>
-            <label>Follow a plan</label>
-            <select
-              value={planProgramId}
-              onChange={(e) => {
-                setPlanProgramId(e.target.value);
-                setPlanDayId('');
-              }}
-            >
-              <option value="">— ad-hoc —</option>
-              {followablePrograms.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.owner.id !== userId ? ` (shared by ${p.owner.name})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          {planProgramId && (
-            <div>
-              <label>Day</label>
-              <select value={planDayId} onChange={(e) => setPlanDayId(e.target.value)}>
-                <option value="">— pick a day —</option>
-                {planDays.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    Wk{d.weekNumber} · {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {planDayId && (
-            <div style={{ flex: '0 0 auto' }}>
-              <button type="button" onClick={loadPlan}>
-                Load sets
-              </button>
-            </div>
-          )}
-          {programDayId && (
-            <div style={{ flex: '0 0 auto' }}>
-              <button type="button" className="ghost" onClick={clearPlan}>
-                Clear plan
-              </button>
-            </div>
-          )}
+      <BlockPicker
+        userId={userId}
+        block={activeBlock.data}
+        programs={followablePrograms}
+        onChange={activeBlock.reload}
+        onLoadDay={trainBlockDay}
+      />
+
+      {blockDay && (
+        <div
+          className="panel"
+          style={{ background: 'var(--accent-weak)', borderColor: 'var(--accent)', marginBottom: '.75rem' }}
+        >
+          Logging <strong>Wk{blockDay.day.week} · {blockDay.day.name}</strong> — it gets a ✅ when you
+          press Log session.{' '}
+          <button type="button" className="ghost small" onClick={clearPlan}>
+            Clear
+          </button>
         </div>
       )}
 
@@ -744,7 +772,8 @@ function LogWorkoutForm({
                 </thead>
                 <tbody>
                   {g.sets.map((s, si) => (
-                    <tr key={si}>
+                    <Fragment key={si}>
+                    <tr>
                       {programDayId && (
                         <td className="muted">
                           set {si + 1}/{g.sets.length}
@@ -807,7 +836,7 @@ function LogWorkoutForm({
                       <td>
                         <select
                           value={s.setType}
-                          onChange={(e) => updateSet(gi, si, { setType: e.target.value as SetType })}
+                          onChange={(e) => changeSetType(gi, si, e.target.value as SetType)}
                           style={{ minWidth: 110 }}
                         >
                           {SET_TYPES.map((t) => (
@@ -853,6 +882,22 @@ function LogWorkoutForm({
                         </button>
                       </td>
                     </tr>
+                    {(s.setType === 'DROP_SET' || s.setType === 'SUPERSET') && (
+                      <tr>
+                        <td colSpan={programDayId ? 7 : 6}>
+                          {s.setType === 'DROP_SET' ? (
+                            <DropRows drops={s.drops} onChange={(drops) => updateSet(gi, si, { drops })} />
+                          ) : (
+                            <SupersetRows
+                              partners={s.supersetPartners}
+                              exercises={exercises.data ?? []}
+                              onChange={(supersetPartners) => updateSet(gi, si, { supersetPartners })}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

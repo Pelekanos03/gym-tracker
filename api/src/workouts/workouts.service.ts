@@ -1,13 +1,21 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkoutSession } from '../domain/workout-session.entity';
 import { ProgramDay } from '../domain/program-day.entity';
 import { SetLog } from '../domain/set-log.entity';
+import { SetDrop } from '../domain/set-drop.entity';
+import { SupersetPartner } from '../domain/superset-partner.entity';
 import { SetType } from '../common/enums';
 import { UsersService } from '../users/users.service';
 import { ExercisesService } from '../exercises/exercises.service';
 import { CoachingService } from '../coaching/coaching.service';
+import { BlocksService } from '../blocks/blocks.service';
 import { LogSessionDto, SetLogInput } from './dto/log-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 
@@ -23,6 +31,7 @@ export class WorkoutsService {
     private readonly users: UsersService,
     private readonly exercises: ExercisesService,
     private readonly coaching: CoachingService,
+    private readonly blocks: BlocksService,
   ) {}
 
   /** A user records a training session and all the sets they did. */
@@ -36,6 +45,17 @@ export class WorkoutsService {
     session.notes = dto.notes ?? '';
     session.programDay = await this.resolveProgramDay(dto.programDayId);
     session.sets = await this.buildSets(dto.sets);
+
+    if (dto.blockId) {
+      const block = await this.blocks.findActiveOwned(dto.blockId, dto.userId);
+      const day = session.programDay;
+      if (!day || !block.program.days.some((d) => d.id === day.id)) {
+        throw new BadRequestException("Pick a day from the block's program to log it to the block");
+      }
+      session.block = block;
+      session.blockWeek = day.weekNumber;
+      session.blockDay = day.dayNumber;
+    }
 
     return this.sessions.save(session);
   }
@@ -109,7 +129,12 @@ export class WorkoutsService {
 
   private async buildSets(setInputs: SetLogInput[]): Promise<SetLog[]> {
     const byId = await this.exercises.findManyByIds([
-      ...new Set(setInputs.map((s) => s.exerciseId)),
+      ...new Set(
+        setInputs.flatMap((s) => [
+          s.exerciseId,
+          ...(s.supersetPartners ?? []).map((p) => p.exerciseId),
+        ]),
+      ),
     ]);
     return setInputs.map((setInput) => {
       const set = new SetLog();
@@ -119,6 +144,27 @@ export class WorkoutsService {
       set.reps = setInput.reps;
       set.rpe = setInput.rpe ?? null;
       set.setType = setInput.setType ?? SetType.WORKING;
+      set.drops =
+        set.setType === SetType.DROP_SET
+          ? (setInput.drops ?? []).map((dropInput, i) => {
+              const drop = new SetDrop();
+              drop.orderIndex = i + 1;
+              drop.weight = dropInput.weight;
+              drop.reps = dropInput.reps;
+              return drop;
+            })
+          : [];
+      set.supersetPartners =
+        set.setType === SetType.SUPERSET
+          ? (setInput.supersetPartners ?? []).map((partnerInput, i) => {
+              const partner = new SupersetPartner();
+              partner.exercise = byId.get(partnerInput.exerciseId)!;
+              partner.orderIndex = i + 1;
+              partner.weight = partnerInput.weight;
+              partner.reps = partnerInput.reps;
+              return partner;
+            })
+          : [];
       return set;
     });
   }

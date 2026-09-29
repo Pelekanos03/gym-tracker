@@ -173,7 +173,6 @@ export function FriendReview({
         >
           <div>
             <strong>{p.name}</strong>{' '}
-            <span className="tag">{p.discipline}</span>{' '}
             <span className="muted">
               {p.days.length} day{p.days.length === 1 ? '' : 's'} · {p.lengthWeeks} wk
             </span>
@@ -215,7 +214,7 @@ export function FriendReview({
           )}
           {(theirPrograms.data ?? []).map((p) => (
             <div key={p.id} style={{ marginBottom: '.4rem' }}>
-              <strong>{p.name}</strong> <span className="tag">{p.discipline}</span>{' '}
+              <strong>{p.name}</strong>{' '}
               <span className="muted">
                 {p.days.length} day{p.days.length === 1 ? '' : 's'} · {p.lengthWeeks} wk
               </span>
