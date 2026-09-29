@@ -682,20 +682,9 @@ function LogWorkoutForm({
         programs={followablePrograms}
         onChange={activeBlock.reload}
         onLoadDay={trainBlockDay}
+        dayLoaded={blockDay !== undefined}
+        onClear={clearPlan}
       />
-
-      {blockDay && (
-        <div
-          className="panel"
-          style={{ background: 'var(--accent-weak)', borderColor: 'var(--accent)', marginBottom: '.75rem' }}
-        >
-          Logging <strong>Wk{blockDay.day.week} · {blockDay.day.name}</strong> — it gets a ✅ when you
-          press Log session.{' '}
-          <button type="button" className="ghost small" onClick={clearPlan}>
-            Clear
-          </button>
-        </div>
-      )}
 
       <div className="row">
         <div>

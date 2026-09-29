@@ -14,6 +14,8 @@ export function BlockPicker({
   programs,
   onChange,
   onLoadDay,
+  dayLoaded,
+  onClear,
 }: {
   userId: string;
   /** undefined while loading, null when no block is running. */
@@ -22,6 +24,9 @@ export function BlockPicker({
   programs: Program[];
   onChange: () => void;
   onLoadDay: (block: TrainingBlock, day: BlockDay) => void;
+  /** Whether a block day is currently loaded into the form, so it can be cleared. */
+  dayLoaded: boolean;
+  onClear: () => void;
 }) {
   const [dayId, setDayId] = useState('');
   /** A block choice waiting for confirmation: a program id, or '' for "no block". */
@@ -90,7 +95,6 @@ export function BlockPicker({
                 {block.days.map((d) => (
                   <option key={d.programDayId} value={d.programDayId}>
                     {d.status === 'DONE' ? '✅ ' : ''}Wk{d.week} · {d.name}
-                    {d.programDayId === block.next?.programDayId ? '  ← next' : ''}
                   </option>
                 ))}
               </select>
@@ -104,6 +108,13 @@ export function BlockPicker({
                 Load sets
               </button>
             </div>
+            {dayLoaded && (
+              <div style={{ flex: '0 0 auto' }}>
+                <button type="button" className="ghost" onClick={onClear}>
+                  Clear
+                </button>
+              </div>
+            )}
             <div style={{ flex: '0 0 auto', alignSelf: 'center' }}>
               <span className="muted">
                 {done}/{block.days.length} days done
