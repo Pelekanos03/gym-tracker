@@ -13,10 +13,12 @@ import type {
 import { SET_TYPE_LABELS } from '../types';
 import { ProgramBuilder } from './ProgramBuilder';
 import { FriendsPanel } from './FriendsPanel';
-import { SessionList } from './SessionList';
-import { ProgressPanel } from './ProgressPanel';
+import { HistoryPanel } from './HistoryPanel';
+import { StatsPanel } from './StatsPanel';
+import { PendingVideoButton, UploadProgress } from './SetVideo';
 import { ExerciseLibrary } from './ExerciseLibrary';
 import { BlockPicker } from './BlockPicker';
+import { ExercisePicker } from './ExercisePicker';
 import {
   DropRows,
   SupersetRows,
@@ -28,7 +30,15 @@ import {
   type PartnerEntry,
 } from './SetExtras';
 
-type Tab = 'log' | 'history' | 'progress' | 'programs' | 'friends';
+type Tab = 'log' | 'history' | 'stats' | 'programs' | 'friends';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'log', label: 'Workout' },
+  { id: 'history', label: 'History' },
+  { id: 'stats', label: 'Stats' },
+  { id: 'programs', label: 'Programs' },
+  { id: 'friends', label: 'Friends' },
+];
 
 /**
  * What a user does here:
@@ -40,6 +50,7 @@ type Tab = 'log' | 'history' | 'progress' | 'programs' | 'friends';
 export function Dashboard({ me }: { me: User }) {
   const sessions = useAsync(() => api.myHistory(me.id), [me.id]);
   const progress = useAsync(() => api.myProgress(me.id), [me.id]);
+  const bodyWeight = useAsync(() => api.bodyWeight(me.id), [me.id]);
   const programs = useAsync(() => api.listPrograms(me.id), [me.id]);
   const incomingRequests = useAsync(
     () => api.friendRequests(me.id, 'incoming'),
@@ -55,40 +66,25 @@ export function Dashboard({ me }: { me: User }) {
 
   return (
     <>
-      <div className="tabs">
-        <button className={tab === 'log' ? 'active' : ''} onClick={() => setTab('log')}>
-          Log workout
-        </button>
-        <button
-          className={tab === 'history' ? 'active' : ''}
-          onClick={() => setTab('history')}
-        >
-          History
-        </button>
-        <button
-          className={tab === 'progress' ? 'active' : ''}
-          onClick={() => setTab('progress')}
-        >
-          Progress
-        </button>
-        <button
-          className={tab === 'programs' ? 'active' : ''}
-          onClick={() => setTab('programs')}
-        >
-          My programs
-        </button>
-        <button
-          className={tab === 'friends' ? 'active' : ''}
-          onClick={() => setTab('friends')}
-        >
-          Friends
-          {(incomingRequests.data?.length ?? 0) > 0 && (
-            <span className="tag" style={{ marginLeft: '.4rem' }}>
-              {incomingRequests.data!.length}
-            </span>
-          )}
-        </button>
-      </div>
+      {/* Top tabs on desktop; the same nav docks to the bottom on a phone. */}
+      <nav className="tabs" aria-label="Sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={tab === t.id ? 'active' : ''}
+            aria-current={tab === t.id ? 'page' : undefined}
+            onClick={() => {
+              setTab(t.id);
+              window.scrollTo({ top: 0 });
+            }}
+          >
+            <span className="tab-label">{t.label}</span>
+            {t.id === 'friends' && (incomingRequests.data?.length ?? 0) > 0 && (
+              <span className="tab-badge">{incomingRequests.data!.length}</span>
+            )}
+          </button>
+        ))}
+      </nav>
 
       {tab === 'log' && (
         <div className="panel">
@@ -102,10 +98,9 @@ export function Dashboard({ me }: { me: User }) {
       )}
 
       {tab === 'history' && (
-        <div className="panel">
-          <h2>Your history</h2>
+        <>
           {sessions.error && <div className="err">{sessions.error}</div>}
-          <SessionList
+          <HistoryPanel
             sessions={sessions.data ?? []}
             userId={me.id}
             onChanged={refreshWorkoutData}
@@ -114,15 +109,22 @@ export function Dashboard({ me }: { me: User }) {
               refreshWorkoutData();
             }}
           />
-        </div>
+        </>
       )}
 
-      {tab === 'progress' && (
-        <div className="panel">
-          <h2>Your progress</h2>
-          {progress.error && <div className="err">{progress.error}</div>}
-          <ProgressPanel data={progress.data ?? []} />
-        </div>
+      {tab === 'stats' && (
+        <>
+          {(progress.error || bodyWeight.error) && (
+            <div className="err">{progress.error ?? bodyWeight.error}</div>
+          )}
+          <StatsPanel
+            userId={me.id}
+            sessions={sessions.data ?? []}
+            progress={progress.data ?? []}
+            bodyWeight={bodyWeight.data ?? []}
+            onBodyWeightChanged={bodyWeight.reload}
+          />
+        </>
       )}
 
       {tab === 'programs' && (
@@ -150,7 +152,7 @@ export function Dashboard({ me }: { me: User }) {
               onCancel={() => setEditingProgram(undefined)}
             />
           </div>
-          <ExerciseLibrary />
+          <ExerciseLibrary userId={me.id} />
         </>
       )}
 
@@ -168,7 +170,7 @@ export function Dashboard({ me }: { me: User }) {
 /**
  * A note-to-self tied to one specific exercise ("brace before every squat"),
  * not the whole session — it's saved per user+exercise, so it shows up again
- * whenever that exercise appears in any future log. The 💡 button toggles the
+ * whenever that exercise appears in any future log. The Cue button toggles the
  * popup open and closed — press it again to dismiss. Browser-only
  * (localStorage), not the backend.
  */
@@ -210,7 +212,7 @@ function ExerciseTip({
         title={text ? `Cue for ${exerciseName}` : `Add a cue for ${exerciseName}`}
         onClick={() => setOpen((o) => !o)}
       >
-        💡
+        Cue
       </button>
 
       {open && (
@@ -342,6 +344,8 @@ interface SetEntry {
    */
   drops: DropEntry[];
   supersetPartners: PartnerEntry[];
+  /** A clip picked for this set; uploaded right after the session is logged. */
+  video?: File;
 }
 
 /** One box in the log-workout form: an exercise and just its own sets. */
@@ -391,7 +395,7 @@ function LogWorkoutForm({
   history: WorkoutSession[];
   onLogged: () => void;
 }) {
-  const exercises = useAsync(() => api.listExercises(), []);
+  const exercises = useAsync(() => api.listExercises(userId), [userId]);
   const myPrograms = useAsync(() => api.listPrograms(userId), [userId]);
   const sharedPrograms = useAsync(() => api.sharedPrograms(userId), [userId]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -404,6 +408,7 @@ function LogWorkoutForm({
   const [error, setError] = useState<string>();
   const [ok, setOk] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState<{ index: number; total: number; fraction: number }>();
 
   // Your own programs plus ones friends have shared with you — a shared
   // program can be followed here (logged against) but stays theirs; it
@@ -463,7 +468,7 @@ function LogWorkoutForm({
     setGroups((gs) =>
       gs.map((g, idx) =>
         idx === gi
-          ? { ...g, sets: [...g.sets, { ...g.sets[g.sets.length - 1] }] }
+          ? { ...g, sets: [...g.sets, { ...g.sets[g.sets.length - 1], video: undefined }] }
           : g,
       ),
     );
@@ -573,7 +578,7 @@ function LogWorkoutForm({
     }
     setBusy(true);
     try {
-      await api.logSession({
+      const logged = await api.logSession({
         userId,
         programDayId,
         blockId: blockDay?.blockId,
@@ -594,15 +599,39 @@ function LogWorkoutForm({
           })),
         ),
       });
+      // The API saves sets in the order they were sent, so the Nth set sent
+      // is the Nth set back — that's how each picked video finds its set.
+      const videos = usableGroups
+        .flatMap((g) => g.sets)
+        .map((s, i) => ({ file: s.video, setId: logged.sets[i]?.id }))
+        .filter((v): v is { file: File; setId: string } => !!v.file && !!v.setId);
+      const failed: string[] = [];
+      for (const [i, v] of videos.entries()) {
+        setUploading({ index: i + 1, total: videos.length, fraction: 0 });
+        try {
+          await api.uploadSetVideo(v.setId, userId, v.file, (fraction) =>
+            setUploading({ index: i + 1, total: videos.length, fraction }),
+          );
+        } catch (err) {
+          failed.push((err as Error).message);
+        }
+      }
+      setUploading(undefined);
       clearPlan();
       setNotes('');
       setOk(blockDay ? `Session logged — Week ${blockDay.day.week} · ${blockDay.day.name} ticked off.` : 'Session logged.');
+      if (failed.length > 0) {
+        setError(
+          `${failed.length} video upload(s) failed (${failed[0]}). The session is saved — retry from History.`,
+        );
+      }
       onLogged();
       activeBlock.reload();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      setUploading(undefined);
     }
   }
 
@@ -713,18 +742,12 @@ function LogWorkoutForm({
             style={{ background: 'var(--panel-2)', padding: '.75rem' }}
           >
             <div className="row" style={{ alignItems: 'center', marginBottom: '.5rem' }}>
-              <select
+              <ExercisePicker
                 style={{ flex: 1 }}
+                exercises={exercises.data ?? []}
                 value={g.exerciseId}
-                onChange={(e) => pickExerciseForGroup(gi, e.target.value)}
-              >
-                <option value="">— pick exercise —</option>
-                {(exercises.data ?? []).map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => pickExerciseForGroup(gi, id)}
+              />
               {g.exerciseId && (
                 <ExerciseTip
                   userId={userId}
@@ -744,152 +767,133 @@ function LogWorkoutForm({
               </button>
             </div>
 
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    {programDayId && <th>Planned</th>}
-                    <th>Done</th>
-                    <th>Weight (kg)</th>
-                    <th>Reps</th>
-                    <th>RPE</th>
-                    <th>Set type</th>
-                    <th
-                      style={{ position: 'sticky', right: 0, background: 'var(--panel-2)' }}
-                    />
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.sets.map((s, si) => (
-                    <Fragment key={si}>
-                    <tr>
-                      {programDayId && (
-                        <td className="muted">
-                          set {si + 1}/{g.sets.length}
-                        </td>
-                      )}
-                      <td>
-                        <button
-                          type="button"
-                          className={s.done ? 'small' : 'ghost small'}
-                          onClick={() => updateSet(gi, si, { done: !s.done })}
-                          title={s.done ? 'Marked done — click to undo' : 'Mark this set as done'}
-                          style={{ width: '100%' }}
-                        >
-                          {s.done ? '✓ Done' : 'Mark done'}
-                        </button>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          value={s.weight}
-                          onChange={(e) => updateSet(gi, si, { weight: e.target.value })}
-                          placeholder="optional"
-                          style={{ width: 80 }}
-                        />
-                        {g.exerciseId &&
-                          (() => {
-                            const map = s.setType === 'WARMUP' ? lastWarmupByExercise : lastByExercise;
-                            const last = map.get(g.exerciseId);
-                            if (!last) return null;
-                            return (
-                              <div className="muted" style={{ fontSize: '.72em', whiteSpace: 'nowrap' }}>
-                                last {s.setType === 'WARMUP' ? 'warm-up ' : ''}
-                                {last.weight}kg×{last.reps}
-                              </div>
-                            );
-                          })()}
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          value={s.reps}
-                          onChange={(e) => updateSet(gi, si, { reps: e.target.value })}
-                          style={{ width: 64 }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={1}
-                          max={10}
-                          step={0.5}
-                          value={s.rpe}
-                          onChange={(e) => updateSet(gi, si, { rpe: e.target.value })}
-                          style={{ width: 64 }}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          value={s.setType}
-                          onChange={(e) => changeSetType(gi, si, e.target.value as SetType)}
-                          style={{ minWidth: 110 }}
-                        >
-                          {SET_TYPES.map((t) => (
-                            <option key={t} value={t}>
-                              {SET_TYPE_LABELS[t]}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td
-                        style={{
-                          whiteSpace: 'nowrap',
-                          position: 'sticky',
-                          right: 0,
-                          background: 'var(--panel-2)',
-                        }}
+            {/* Grid rows, not a table: on a phone each set wraps onto two lines instead of scrolling sideways. */}
+            <div className="set-grid">
+              <div className="set-grid-head">
+                <span>Set</span>
+                <span>Weight (kg)</span>
+                <span>Reps</span>
+                <span>RPE</span>
+                <span>Type</span>
+                <span />
+              </div>
+              {g.sets.map((s, si) => (
+                <Fragment key={si}>
+                  <div className={`set-row${s.done ? ' done' : ''}`}>
+                    <button
+                      type="button"
+                      className={`set-done ${s.done ? '' : 'ghost'}`}
+                      onClick={() => updateSet(gi, si, { done: !s.done })}
+                      title={s.done ? 'Marked done — tap to undo' : 'Mark this set as done'}
+                    >
+                      {s.done ? '✓' : si + 1}
+                      {programDayId && <span className="set-planned">/{g.sets.length}</span>}
+                    </button>
+                    <div className="set-field">
+                      <label className="set-label">kg</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.5}
+                        value={s.weight}
+                        onChange={(e) => updateSet(gi, si, { weight: e.target.value })}
+                        placeholder="—"
+                      />
+                      {g.exerciseId &&
+                        (() => {
+                          const map = s.setType === 'WARMUP' ? lastWarmupByExercise : lastByExercise;
+                          const last = map.get(g.exerciseId);
+                          if (!last) return null;
+                          return (
+                            <div className="set-last muted">
+                              last {last.weight}×{last.reps}
+                            </div>
+                          );
+                        })()}
+                    </div>
+                    <div className="set-field">
+                      <label className="set-label">reps</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        value={s.reps}
+                        onChange={(e) => updateSet(gi, si, { reps: e.target.value })}
+                      />
+                    </div>
+                    <div className="set-field">
+                      <label className="set-label">RPE</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        value={s.rpe}
+                        onChange={(e) => updateSet(gi, si, { rpe: e.target.value })}
+                      />
+                    </div>
+                    <select
+                      className="set-type-select"
+                      value={s.setType}
+                      onChange={(e) => changeSetType(gi, si, e.target.value as SetType)}
+                      aria-label="Set type"
+                    >
+                      {SET_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {SET_TYPE_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="set-actions">
+                      <PendingVideoButton
+                        file={s.video}
+                        onChange={(video) => updateSet(gi, si, { video })}
+                      />
+                      <button
+                        type="button"
+                        className="ghost small"
+                        title="Move up"
+                        onClick={() => moveSet(gi, si, -1)}
+                        disabled={si === 0}
                       >
-                        <button
-                          type="button"
-                          className="ghost small"
-                          title="Move up"
-                          onClick={() => moveSet(gi, si, -1)}
-                          disabled={si === 0}
-                        >
-                          ↑
-                        </button>{' '}
-                        <button
-                          type="button"
-                          className="ghost small"
-                          title="Move down"
-                          onClick={() => moveSet(gi, si, 1)}
-                          disabled={si === g.sets.length - 1}
-                        >
-                          ↓
-                        </button>{' '}
-                        <button
-                          type="button"
-                          className="ghost small"
-                          title="Remove this set"
-                          onClick={() => removeSet(gi, si)}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                    {(s.setType === 'DROP_SET' || s.setType === 'SUPERSET') && (
-                      <tr>
-                        <td colSpan={programDayId ? 7 : 6}>
-                          {s.setType === 'DROP_SET' ? (
-                            <DropRows drops={s.drops} onChange={(drops) => updateSet(gi, si, { drops })} />
-                          ) : (
-                            <SupersetRows
-                              partners={s.supersetPartners}
-                              exercises={exercises.data ?? []}
-                              onChange={(supersetPartners) => updateSet(gi, si, { supersetPartners })}
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost small"
+                        title="Move down"
+                        onClick={() => moveSet(gi, si, 1)}
+                        disabled={si === g.sets.length - 1}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost small"
+                        title="Remove this set"
+                        onClick={() => removeSet(gi, si)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  {(s.setType === 'DROP_SET' || s.setType === 'SUPERSET') && (
+                    <div className="set-extras">
+                      {s.setType === 'DROP_SET' ? (
+                        <DropRows drops={s.drops} onChange={(drops) => updateSet(gi, si, { drops })} />
+                      ) : (
+                        <SupersetRows
+                          partners={s.supersetPartners}
+                          exercises={exercises.data ?? []}
+                          onChange={(supersetPartners) => updateSet(gi, si, { supersetPartners })}
+                        />
+                      )}
+                    </div>
+                  )}
+                </Fragment>
+              ))}
             </div>
 
             <button
@@ -909,8 +913,16 @@ function LogWorkoutForm({
         <button type="button" className="ghost" onClick={addGroup}>
           + Add exercise
         </button>
-        <button disabled={busy}>Log session</button>
+        <button disabled={busy}>{uploading ? 'Uploading…' : 'Log session'}</button>
       </div>
+      {uploading && (
+        <div style={{ marginTop: '.5rem' }}>
+          <UploadProgress
+            fraction={uploading.fraction}
+            label={`Uploading video ${uploading.index} of ${uploading.total} · ${Math.round(uploading.fraction * 100)}%`}
+          />
+        </div>
+      )}
     </form>
   );
 }

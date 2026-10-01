@@ -67,6 +67,89 @@ npm run dev:web
 
 Open http://localhost:5173 and log in.
 
+## Running it with Docker
+
+Needs Docker with Compose v2. Three containers: `db` (PostgreSQL), `api`
+(NestJS) and `web` (nginx serving the React build and proxying `/api`).
+Data lives in two volumes — `db-data` (Postgres) and `uploads` (set
+videos) — so it survives restarts and rebuilds.
+
+```bash
+cp .env.example .env              # then fill in POSTGRES_PASSWORD and JWT_SECRET
+                                  # (openssl rand -hex 32), and COOKIE_SECURE=false
+                                  # while testing on plain http://localhost
+docker compose up -d --build      # build + start → http://localhost:8080
+docker compose exec api node dist/database/seed.js   # demo data (optional, never in prod)
+docker compose logs -f api        # watch logs
+docker compose down               # stop (data is kept)
+```
+
+Local dev (`npm run dev:api`) still uses a SQLite file with no setup;
+Docker/production use Postgres, whose schema is owned by migrations in
+`api/src/database/migrations` and applied automatically on startup.
+After changing an entity, generate a migration against a Postgres
+database and commit it:
+
+```bash
+DATABASE_URL=postgres://… npm run migration:generate --workspace api -- src/database/migrations/<Name>
+```
+
+## Sharing it for a test (no server)
+
+Runs the Docker app on your PC and gives it a public https link through a
+free Cloudflare quick tunnel. In `.env`: set `SIGNUP_INVITE_CODE`,
+`ADMIN_EMAILS` (you — to read feedback), `COOKIE_SECURE=true`,
+`MAX_VIDEO_MB=100` (the free tunnel's upload cap), `TRUST_PROXY_HOPS=2`.
+
+```bash
+docker compose --profile share up -d --build
+docker compose logs tunnel | grep trycloudflare.com    # the link
+# then put that link in .env as APP_URL and WEB_ORIGIN, and:
+docker compose --profile share up -d api
+```
+
+Your PC has to stay on (and not sleep). The link changes whenever the
+tunnel container restarts — send testers the new one. Testers' notes
+("Send feedback" in the footer) show up on your Account page.
+
+## Testing
+
+```bash
+npm test                          # API unit tests
+npm run smoke                     # end-to-end + security checks vs http://localhost:8080
+npm run smoke -- https://your-domain   # same checks against production (read-only, safe)
+```
+
+## Production (VPS)
+
+1. **Server**: a small Ubuntu VPS (2 GB RAM is plenty) with Docker installed.
+   Open only ports 22, 80, 443 (`ufw`), log in with SSH keys, not passwords.
+2. **Domain**: point an `A` record at the server's IP.
+3. **Code + secrets**: `git clone` the repo, `cp .env.example .env`, set
+   fresh `POSTGRES_PASSWORD` / `JWT_SECRET` (`openssl rand -hex 32`),
+   `COOKIE_SECURE=true`, `WEB_ORIGIN` and `APP_URL` = `https://your-domain`,
+   `WEB_PORT=8080`. For a closed beta set `SIGNUP_INVITE_CODE`; for
+   password-reset emails set `SMTP_URL` + `MAIL_FROM` (without SMTP the
+   reset link appears in `docker compose logs api` and you pass it on).
+   Fill in `web/src/legal.ts` (your name, contact email, country, providers).
+4. **HTTPS**: put Caddy in front — it gets and renews the certificate
+   by itself. `/etc/caddy/Caddyfile`:
+   ```
+   your-domain {
+     reverse_proxy localhost:8080
+     request_body { max_size 500MB }
+   }
+   ```
+5. **Start**: `docker compose up -d --build`, then
+   `npm run smoke -- https://your-domain` from your PC with two real accounts.
+6. **Backups** (daily cron), and test restoring one:
+   ```bash
+   docker compose exec -T db pg_dump -U gym gym | gzip > db-$(date +%F).sql.gz
+   docker run --rm -v gym-app_uploads:/data -v "$PWD":/b alpine tar czf /b/uploads-$(date +%F).tgz -C /data .
+   ```
+   Copy them off the server (another machine or object storage).
+7. **Updates**: `git pull && docker compose up -d --build` — migrations run on start.
+
 ## Try the full flow
 
 1. Log in as **alex@example.com**: build a program under "My programs" (Alex
@@ -104,11 +187,10 @@ Open http://localhost:5173 and log in.
 
 ## Not done yet (good next steps)
 
-- **Real session auth** — login checks the password, but the app still tracks
-  "who you are" client-side (localStorage), not via a server session/JWT.
-  Add `@nestjs/passport` + JWT and a guard that reads the current user.
-- Multi-week / multi-day program builder in the UI (the API already supports it).
-- Editing and deleting programs, sessions, exercises.
-- Real charts (e.g. Recharts) instead of the CSS sparklines.
-- Migrations instead of `synchronize: true`, and a move to Postgres.
-- Tests.
+- **Email verification** at sign-up (password reset by email already works).
+- Have the privacy policy / terms (`web/src/legal.ts`, `LegalPage.tsx`) checked before opening sign-up widely.
+- **Video storage off the server** (S3-compatible object storage) once uploads grow;
+  and transcoding iPhone HEVC clips so every browser can play them.
+- **Monitoring**: uptime check on `/api/health`, error tracking (e.g. Sentry).
+- **CI**: run `npm test` + a build on every push (GitHub Actions).
+- More tests: frontend components and a Playwright end-to-end run.

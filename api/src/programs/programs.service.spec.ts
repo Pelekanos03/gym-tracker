@@ -67,7 +67,7 @@ describe('ProgramsService', () => {
 
   describe('copy', () => {
     it("lets the owner copy their own program without a coaching check", async () => {
-      const copy = await service.copy('prog1', { toUserId: 'alex' });
+      const copy = await service.copy('prog1', { toUserId: 'alex' }, 'alex');
       expect(coaching.assertCoach).not.toHaveBeenCalled();
       expect(copy.owner.id).toBe('alex');
       expect(copy.id).not.toBe('prog1'); // real clone, not the same row
@@ -76,16 +76,21 @@ describe('ProgramsService', () => {
     });
 
     it("checks the owner is an accepted coach of the destination user before sending a copy", async () => {
-      const copy = await service.copy('prog1', { toUserId: 'sam' });
+      const copy = await service.copy('prog1', { toUserId: 'sam' }, 'alex');
       expect(coaching.assertCoach).toHaveBeenCalledWith('alex', 'sam');
       expect(copy.owner.id).toBe('sam');
       expect(copy.days[0].name).toBe('Day 1');
       expect(copy.days[0].exercises[0].targetSets).toBe(5);
     });
 
+    it("refuses to copy someone else's program", async () => {
+      await expect(service.copy('prog1', { toUserId: 'sam' }, 'sam')).rejects.toThrow(ForbiddenException);
+      expect(coaching.assertCoach).not.toHaveBeenCalled();
+    });
+
     it('refuses to copy to a client the owner does not coach', async () => {
       coaching.assertCoach.mockRejectedValueOnce(new NotFoundException('Not an accepted coach of that user'));
-      await expect(service.copy('prog1', { toUserId: strangerId })).rejects.toThrow(NotFoundException);
+      await expect(service.copy('prog1', { toUserId: strangerId }, 'alex')).rejects.toThrow(NotFoundException);
       expect(programsRepo.save).not.toHaveBeenCalled();
     });
   });

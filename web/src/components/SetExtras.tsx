@@ -1,4 +1,5 @@
 import type { Exercise } from '../types';
+import { ExercisePicker } from './ExercisePicker';
 
 /**
  * The sub-rows shown under a set in the log/edit forms: the drops of a drop
@@ -152,20 +153,14 @@ export function SupersetRows({
           <span className="muted" style={fixed}>
             ↳ +
           </span>
-          <select
+          <ExercisePicker
+            exercises={exercises}
             value={p.exerciseId}
-            onChange={(e) =>
-              onChange(partners.map((x, j) => (j === i ? { ...x, exerciseId: e.target.value } : x)))
+            onChange={(id) =>
+              onChange(partners.map((x, j) => (j === i ? { ...x, exerciseId: id } : x)))
             }
             style={{ ...fixed, maxWidth: 200 }}
-          >
-            <option value="">— pick exercise —</option>
-            {exercises.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name}
-              </option>
-            ))}
-          </select>
+          />
           <WeightRepsInputs
             weight={p.weight}
             reps={p.reps}

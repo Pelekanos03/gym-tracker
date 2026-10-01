@@ -4,13 +4,13 @@ import { useAsync } from '../hooks';
 import type { Exercise, ExerciseCategory } from '../types';
 
 /**
- * The shared exercise library everyone builds programs and logs sets from.
- * Anyone can add a movement that's missing — it's immediately available to
- * every user, the same as the seeded exercises. (Other tabs pick up a newly
- * added exercise next time they're opened — each fetches its own copy.)
+ * Your exercise library: the built-in movements everyone shares, plus the
+ * ones you've added. What you add is yours alone — friends don't see it in
+ * their library. (Other tabs pick up a newly added exercise next time
+ * they're opened — each fetches its own copy.)
  */
-export function ExerciseLibrary() {
-  const exercises = useAsync(() => api.listExercises(), []);
+export function ExerciseLibrary({ userId }: { userId: string }) {
+  const exercises = useAsync(() => api.listExercises(userId), [userId]);
   const [open, setOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const byMuscle = groupByMuscle(exercises.data ?? []);
@@ -32,11 +32,17 @@ export function ExerciseLibrary() {
       {exercises.error && <div className="err">{exercises.error}</div>}
 
       {mergeOpen && (
-        <MergeExercisesTool exercises={exercises.data ?? []} onMerged={exercises.reload} />
+        <MergeExercisesTool
+          userId={userId}
+          exercises={exercises.data ?? []}
+          onMerged={exercises.reload}
+        />
       )}
 
       {open && (
         <AddExerciseForm
+          userId={userId}
+          muscles={Object.keys(byMuscle)}
           onCreated={() => {
             setOpen(false);
             exercises.reload();
@@ -44,14 +50,24 @@ export function ExerciseLibrary() {
         />
       )}
 
+      <YourExercises
+        exercises={(exercises.data ?? []).filter((ex) => ex.ownerId === userId)}
+        onDeleted={exercises.reload}
+      />
+
       {Object.entries(byMuscle).map(([muscle, list]) => (
         <div key={muscle} style={{ marginTop: '.75rem' }}>
           <h3 style={{ marginBottom: '.3rem' }}>{muscle}</h3>
           <div className="row" style={{ gap: '.4rem' }}>
             {list.map((ex) => (
-              <span key={ex.id} className="tag">
+              <span
+                key={ex.id}
+                className="tag"
+                title={ex.ownerId === userId ? 'Added by you — only you see it' : undefined}
+              >
                 {ex.name}
-                {ex.isCompetitionLift && ' 🏆'}
+                {ex.isCompetitionLift && <span className="muted"> · comp</span>}
+                {ex.ownerId === userId && <span className="muted"> · yours</span>}
               </span>
             ))}
           </div>
@@ -88,9 +104,11 @@ function findPossibleDuplicates(exercises: Exercise[]): [Exercise, Exercise][] {
  * before the "Merge now" button is even clickable.
  */
 function MergeExercisesTool({
+  userId,
   exercises,
   onMerged,
 }: {
+  userId: string;
   exercises: Exercise[];
   onMerged: () => void;
 }) {
@@ -102,7 +120,16 @@ function MergeExercisesTool({
   const [done, setDone] = useState<string>();
   const [busy, setBusy] = useState(false);
 
-  const possibleDuplicates = useMemo(() => findPossibleDuplicates(exercises), [exercises]);
+  // Only your own additions can be merged away (deleted); built-in and
+  // friends' exercises can still be the one you keep.
+  const mine = useMemo(() => exercises.filter((ex) => ex.ownerId === userId), [exercises, userId]);
+  const possibleDuplicates = useMemo(
+    () =>
+      findPossibleDuplicates(exercises).filter(
+        ([a, b]) => a.ownerId === userId || b.ownerId === userId,
+      ),
+    [exercises, userId],
+  );
   const keepEx = exercises.find((ex) => ex.id === keepId);
   const mergeEx = exercises.find((ex) => ex.id === mergeId);
 
@@ -120,7 +147,7 @@ function MergeExercisesTool({
       return;
     }
     try {
-      setPreview(await api.mergeExercisesPreview(keepId, mergeId));
+      setPreview(await api.mergeExercisesPreview(keepId, mergeId, userId));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -130,7 +157,7 @@ function MergeExercisesTool({
     setBusy(true);
     setError(undefined);
     try {
-      const kept = await api.mergeExercises(keepId, mergeId);
+      const kept = await api.mergeExercises(keepId, mergeId, userId);
       setDone(kept.name);
       setKeepId('');
       setMergeId('');
@@ -147,9 +174,10 @@ function MergeExercisesTool({
     <div className="panel" style={{ background: 'var(--panel-2)', marginTop: '.75rem' }}>
       <h3>Merge duplicate exercises</h3>
       <p className="muted" style={{ fontSize: '.85em' }}>
-        If a friend logs the same movement under a different name (e.g. "Bench" vs "Bench
-        Press"), merge them into one entry. Every program line and logged set on the duplicate
-        moves to the one you keep, then the duplicate is deleted — this can't be undone.
+        If you added a movement that's already in the library under a different name (e.g.
+        "Bench" vs "Bench Press"), merge your copy into it. Every program line and logged set
+        on the duplicate moves to the one you keep, then the duplicate is deleted — this can't
+        be undone. You can only merge away exercises you added yourself.
       </p>
 
       {possibleDuplicates.length > 0 && (
@@ -194,7 +222,7 @@ function MergeExercisesTool({
             }}
           >
             <option value="">— pick —</option>
-            {exercises.map((ex) => (
+            {mine.map((ex) => (
               <option key={ex.id} value={ex.id}>
                 {ex.name}
               </option>
@@ -245,7 +273,16 @@ function groupByMuscle(exercises: Exercise[]): Record<string, Exercise[]> {
   return groups;
 }
 
-function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
+function AddExerciseForm({
+  userId,
+  muscles,
+  onCreated,
+}: {
+  userId: string;
+  /** Existing body parts, offered as suggestions — any new one can still be typed. */
+  muscles: string[];
+  onCreated: () => void;
+}) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<ExerciseCategory>('COMPOUND');
   const [primaryMuscle, setPrimaryMuscle] = useState('');
@@ -262,7 +299,7 @@ function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
     }
     setBusy(true);
     try {
-      await api.createExercise({ name, category, primaryMuscle, isCompetitionLift });
+      await api.createExercise({ ownerId: userId, name, category, primaryMuscle, isCompetitionLift });
       setName('');
       setPrimaryMuscle('');
       setIsCompetitionLift(false);
@@ -287,8 +324,14 @@ function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
           <input
             value={primaryMuscle}
             onChange={(e) => setPrimaryMuscle(e.target.value)}
-            placeholder="e.g. Chest"
+            placeholder="e.g. Chest, or something specific"
+            list="body-part-suggestions"
           />
+          <datalist id="body-part-suggestions">
+            {muscles.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
         </div>
         <div>
           <label>Category</label>
@@ -316,5 +359,120 @@ function AddExerciseForm({ onCreated }: { onCreated: () => void }) {
         Add exercise
       </button>
     </form>
+  );
+}
+
+/** The exercises you added, each deletable after a confirmation that says what goes with it. */
+function YourExercises({ exercises, onDeleted }: { exercises: Exercise[]; onDeleted: () => void }) {
+  const [confirming, setConfirming] = useState<string>();
+  if (exercises.length === 0) return null;
+  return (
+    <div className="your-exercises">
+      <h3>Added by you</h3>
+      {[...exercises]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((ex) =>
+          confirming === ex.id ? (
+            <ConfirmDeleteExercise
+              key={ex.id}
+              exercise={ex}
+              onCancel={() => setConfirming(undefined)}
+              onDeleted={() => {
+                setConfirming(undefined);
+                onDeleted();
+              }}
+            />
+          ) : (
+            <div key={ex.id} className="your-exercise-row">
+              <span>
+                {ex.name} <span className="muted">· {ex.primaryMuscle}</span>
+              </span>
+              <button type="button" className="ghost small" onClick={() => setConfirming(ex.id)}>
+                Delete
+              </button>
+            </div>
+          ),
+        )}
+    </div>
+  );
+}
+
+function ConfirmDeleteExercise({
+  exercise,
+  onCancel,
+  onDeleted,
+}: {
+  exercise: Exercise;
+  onCancel: () => void;
+  onDeleted: () => void;
+}) {
+  const preview = useAsync(() => api.deleteExercisePreview(exercise.id), [exercise.id]);
+  const [understood, setUnderstood] = useState(false);
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const p = preview.data;
+  const losesData = !!p && (p.setLogCount > 0 || p.programExerciseCount > 0);
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.deleteExercise(exercise.id);
+      onDeleted();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel confirm-delete">
+      <strong>Delete "{exercise.name}"?</strong>
+      {(preview.error || error) && <div className="err">{preview.error ?? error}</div>}
+      {!p && !preview.error && <p className="muted">Checking what uses it…</p>}
+      {p && (
+        <>
+          {losesData ? (
+            <p>
+              This also deletes <strong>{p.setLogCount}</strong> logged set(s) and{' '}
+              <strong>{p.programExerciseCount}</strong> program line(s) of yours that use it. This
+              can't be undone.
+            </p>
+          ) : (
+            <p className="muted">Nothing of yours uses it — it just leaves your library.</p>
+          )}
+          {p.usedByOthers && (
+            <p className="muted">
+              A friend or client still uses it, so their copy of it stays — it only disappears
+              for you.
+            </p>
+          )}
+          {losesData && (
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={understood}
+                onChange={(e) => setUnderstood(e.target.checked)}
+              />
+              <span>I understand those sets and program lines will be deleted.</span>
+            </label>
+          )}
+        </>
+      )}
+      <div className="row" style={{ justifyContent: 'flex-start' }}>
+        <button
+          type="button"
+          className="danger"
+          disabled={!p || busy || (losesData && !understood)}
+          onClick={confirmDelete}
+          style={{ flex: '0 0 auto' }}
+        >
+          {busy ? 'Deleting…' : 'Delete exercise'}
+        </button>
+        <button type="button" className="ghost" onClick={onCancel} style={{ flex: '0 0 auto' }}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

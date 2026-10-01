@@ -1,5 +1,6 @@
 import 'reflect-metadata';
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
+import { BUILT_IN_EXERCISES } from './built-in-exercises';
 import { dataSourceOptions } from './data-source-options';
 import { Exercise } from '../domain/exercise.entity';
 import { User } from '../domain/user.entity';
@@ -27,37 +28,23 @@ import { hashPassword } from '../common/password';
  *
  * Run with:  npm run seed --workspace api
  */
-const EXERCISES: Partial<Exercise>[] = [
-  { name: 'Back Squat', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads', isCompetitionLift: true },
-  { name: 'Bench Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Chest', isCompetitionLift: true },
-  { name: 'Deadlift', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Posterior Chain', isCompetitionLift: true },
-  { name: 'Overhead Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Shoulders' },
-  { name: 'Front Squat', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads' },
-  { name: 'Romanian Deadlift', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Hamstrings' },
-  { name: 'Barbell Row', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Back' },
-  { name: 'Pull-Up', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Back' },
-  { name: 'Incline Dumbbell Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Chest' },
-  { name: 'Leg Press', category: ExerciseCategory.COMPOUND, primaryMuscle: 'Quads' },
-  { name: 'Lat Pulldown', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Back' },
-  { name: 'Dumbbell Curl', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Biceps' },
-  { name: 'Triceps Pushdown', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Triceps' },
-  { name: 'Lateral Raise', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Shoulders' },
-  { name: 'Leg Curl', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Hamstrings' },
-  { name: 'Leg Extension', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Quads' },
-  { name: 'Calf Raise', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Calves' },
-  { name: 'Face Pull', category: ExerciseCategory.ISOLATION, primaryMuscle: 'Rear Delts' },
-];
+
 
 async function run() {
+  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--i-know-this-is-production')) {
+    throw new Error(
+      'Refusing to seed demo users/workouts into production. (Built-in exercises are added automatically on startup.)',
+    );
+  }
   const dataSource = new DataSource(dataSourceOptions);
   await dataSource.initialize();
 
   const exerciseRepo = dataSource.getRepository(Exercise);
-  for (const data of EXERCISES) {
-    const exists = await exerciseRepo.findOne({ where: { name: data.name } });
+  for (const data of BUILT_IN_EXERCISES) {
+    const exists = await exerciseRepo.findOne({ where: { name: data.name, ownerId: IsNull() } });
     if (!exists) await exerciseRepo.save(exerciseRepo.create(data));
   }
-  console.log(`Seeded ${EXERCISES.length} exercises.`);
+  console.log(`Seeded ${BUILT_IN_EXERCISES.length} exercises.`);
 
   const userRepo = dataSource.getRepository(User);
   const demoUsers = [

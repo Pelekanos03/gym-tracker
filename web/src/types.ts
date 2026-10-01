@@ -23,6 +23,17 @@ export interface User {
   name: string;
   email: string;
   createdAt: string;
+  /** Only on /auth/me: may read testers' feedback. */
+  isAdmin?: boolean;
+}
+
+export interface FeedbackItem {
+  id: string;
+  from: { name: string; email: string };
+  message: string;
+  page: string;
+  userAgent: string;
+  createdAt: string;
 }
 
 export interface Exercise {
@@ -31,6 +42,8 @@ export interface Exercise {
   category: ExerciseCategory;
   primaryMuscle: string;
   isCompetitionLift: boolean;
+  /** Who added it; null = built-in, shared by everyone. */
+  ownerId: string | null;
 }
 
 export interface FriendEntry {
@@ -129,6 +142,8 @@ export interface SetLog {
   drops: SetDrop[];
   /** Only a SUPERSET has any. */
   supersetPartners: SupersetPartner[];
+  /** Set when the set has a video; play it via videoUrl(set.id). */
+  videoFile: string | null;
 }
 
 export interface WorkoutSession {
@@ -180,4 +195,12 @@ export interface TrainingBlock {
   program: { id: string; name: string; owner: { id: string; name: string } };
   days: BlockDay[];
   next: BlockDay | null;
+}
+
+export interface BodyWeightEntry {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** kg */
+  weight: number;
 }

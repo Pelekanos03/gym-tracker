@@ -46,6 +46,10 @@ export class SetLog {
   @Column({ name: 'set_type', type: 'varchar', enum: SetType, default: SetType.WORKING })
   setType: SetType;
 
+  /** Filename of an uploaded video of this set (under VIDEO_DIR), if any. */
+  @Column({ name: 'video_file', type: 'varchar', nullable: true })
+  videoFile: string | null;
+
   /** The weight drops that followed the top set. Only a DROP_SET has any. */
   @OneToMany(() => SetDrop, (drop) => drop.set, { cascade: true, eager: true })
   drops: SetDrop[];

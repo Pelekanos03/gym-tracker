@@ -5,6 +5,7 @@ import { Program } from '../domain/program.entity';
 import { ProgramShare } from '../domain/program-share.entity';
 import { UsersService } from '../users/users.service';
 import { FriendshipService } from '../friendship/friendship.service';
+import { CoachingService } from '../coaching/coaching.service';
 
 @Injectable()
 export class ProgramShareService {
@@ -15,7 +16,26 @@ export class ProgramShareService {
     private readonly shares: Repository<ProgramShare>,
     private readonly users: UsersService,
     private readonly friendship: FriendshipService,
+    private readonly coaching: CoachingService,
   ) {}
+
+  /**
+   * A program is visible to its owner, to friends it's shared with, and
+   * to the owner's accepted coach. Anyone else gets a 404, same as a
+   * program that doesn't exist.
+   */
+  async findVisible(programId: string, viewerId: string): Promise<Program> {
+    const program = await this.findProgramOrThrow(programId);
+    if (program.owner.id === viewerId) return program;
+    const shared = await this.shares.exist({
+      where: { program: { id: programId }, sharedWith: { id: viewerId } },
+    });
+    if (shared) return program;
+    await this.coaching.assertCoach(viewerId, program.owner.id).catch(() => {
+      throw new NotFoundException('Program not found');
+    });
+    return program;
+  }
 
   /**
    * Shares a program with a friend: they can see it and log workouts
@@ -54,7 +74,12 @@ export class ProgramShareService {
   }
 
   /** Who a program is currently shared with (for the owner to manage). */
-  async sharesFor(programId: string): Promise<ProgramShare[]> {
+  /** Who it's shared with — the owner's business only. */
+  async sharesFor(programId: string, ownerId: string): Promise<ProgramShare[]> {
+    const program = await this.findProgramOrThrow(programId);
+    if (program.owner.id !== ownerId) {
+      throw new ForbiddenException("Only the owner can see who this program is shared with");
+    }
     return this.shares.find({ where: { program: { id: programId } } });
   }
 

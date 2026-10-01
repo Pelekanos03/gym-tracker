@@ -13,6 +13,7 @@ import {
   type DropEntry,
   type PartnerEntry,
 } from './SetExtras';
+import { ExercisePicker } from './ExercisePicker';
 
 const SET_TYPES: SetType[] = ['WORKING', 'WARMUP', 'DROP_SET', 'SUPERSET', 'BACKOFF', 'AMRAP'];
 
@@ -24,6 +25,8 @@ interface SetRow {
   setType: SetType;
   drops: DropEntry[];
   supersetPartners: PartnerEntry[];
+  /** An already-uploaded video; sent back so saving the edit keeps it. */
+  videoFile?: string | null;
 }
 
 function rowsFromSession(session: WorkoutSession): SetRow[] {
@@ -39,6 +42,7 @@ function rowsFromSession(session: WorkoutSession): SetRow[] {
     supersetPartners: [...(s.supersetPartners ?? [])]
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((p) => ({ exerciseId: p.exercise.id, weight: String(p.weight), reps: String(p.reps) })),
+    videoFile: s.videoFile,
   }));
 }
 
@@ -54,7 +58,7 @@ export function SessionEditor({
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const exercises = useAsync(() => api.listExercises(), []);
+  const exercises = useAsync(() => api.listExercises(userId), [userId]);
   const [date, setDate] = useState(session.date);
   const [notes, setNotes] = useState(session.notes);
   const [rows, setRows] = useState<SetRow[]>(rowsFromSession(session));
@@ -106,6 +110,7 @@ export function SessionEditor({
             drops: r.setType === 'DROP_SET' ? dropsPayload(r.drops) : undefined,
             supersetPartners:
               r.setType === 'SUPERSET' ? partnersPayload(r.supersetPartners) : undefined,
+            videoFile: r.videoFile ?? undefined,
           };
         }),
       });
@@ -155,17 +160,12 @@ export function SessionEditor({
             <Fragment key={i}>
             <tr>
               <td>
-                <select
+                <ExercisePicker
+                  exercises={exercises.data ?? []}
                   value={r.exerciseId}
-                  onChange={(e) => update(i, { exerciseId: e.target.value })}
-                >
-                  <option value="">— pick —</option>
-                  {(exercises.data ?? []).map((ex) => (
-                    <option key={ex.id} value={ex.id}>
-                      {ex.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => update(i, { exerciseId: id })}
+                  style={{ minWidth: 150 }}
+                />
               </td>
               <td>
                 <input

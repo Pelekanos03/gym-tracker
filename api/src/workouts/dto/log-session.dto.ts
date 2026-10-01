@@ -78,6 +78,15 @@ export class SetLogInput {
   @ValidateNested({ each: true })
   @Type(() => SupersetPartnerInput)
   supersetPartners?: SupersetPartnerInput[];
+
+  /**
+   * Keeps an already-uploaded video on this set when a session is edited
+   * (editing rebuilds every set). Only honoured if the video belonged to
+   * one of the session's own sets; new videos go through the upload route.
+   */
+  @IsOptional()
+  @IsString()
+  videoFile?: string;
 }
 
 export class LogSessionDto {

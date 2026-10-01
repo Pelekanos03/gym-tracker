@@ -17,6 +17,7 @@ import { ExercisesService } from '../exercises/exercises.service';
 import { CoachingService } from '../coaching/coaching.service';
 import { BlocksService } from '../blocks/blocks.service';
 import { LogSessionDto, SetLogInput } from './dto/log-session.dto';
+import { removeVideoFile, videoPath } from '../common/uploads';
 import { UpdateSessionDto } from './dto/update-session.dto';
 
 @Injectable()
@@ -68,6 +69,34 @@ export class WorkoutsService {
     });
   }
 
+  /** A session is visible to the lifter and their accepted coach; anyone else gets a 404. */
+  async findVisible(id: string, viewerId: string): Promise<WorkoutSession> {
+    const session = await this.findById(id);
+    await this.assertCanWatch(session.user.id, viewerId);
+    return session;
+  }
+
+  /**
+   * Path of a set's video on disk, if `viewerId` may watch it: the lifter
+   * themself or their accepted coach. Friends can't — videos are private.
+   */
+  async videoPathFor(setId: string, viewerId: string): Promise<string> {
+    const set = await this.setLogs.findOne({
+      where: { id: setId },
+      relations: { session: { user: true } },
+    });
+    if (!set?.videoFile) throw new NotFoundException('Video not found');
+    await this.assertCanWatch(set.session.user.id, viewerId);
+    return videoPath(set.videoFile);
+  }
+
+  private async assertCanWatch(ownerId: string, viewerId: string): Promise<void> {
+    if (ownerId === viewerId) return;
+    await this.coaching.assertCoach(viewerId, ownerId).catch(() => {
+      throw new NotFoundException('Not found');
+    });
+  }
+
   async findById(id: string): Promise<WorkoutSession> {
     const session = await this.sessions.findOne({ where: { id } });
     if (!session) throw new NotFoundException('Session not found');
@@ -103,12 +132,16 @@ export class WorkoutsService {
     session.notes = dto.notes ?? '';
     session.programDay = await this.resolveProgramDay(dto.programDayId);
 
+    const oldVideos = new Set(session.sets.map((s) => s.videoFile).filter((f): f is string => !!f));
     if (session.sets.length > 0) {
       await this.setLogs.remove(session.sets);
     }
-    session.sets = await this.buildSets(dto.sets);
+    session.sets = await this.buildSets(dto.sets, oldVideos);
 
-    return this.sessions.save(session);
+    const saved = await this.sessions.save(session);
+    const kept = new Set(saved.sets.map((s) => s.videoFile));
+    await Promise.all([...oldVideos].filter((f) => !kept.has(f)).map(removeVideoFile));
+    return saved;
   }
 
   /** Only the user who logged a session may delete it. */
@@ -117,7 +150,43 @@ export class WorkoutsService {
     if (session.user.id !== userId) {
       throw new ForbiddenException('Only the user who logged this session can delete it');
     }
+    const videos = session.sets.map((s) => s.videoFile);
     await this.sessions.remove(session);
+    await Promise.all(videos.map(removeVideoFile));
+  }
+
+  /** Attaches (or replaces) the video of one set. Only its lifter may. */
+  async attachVideo(setId: string, userId: string, file: string): Promise<SetLog> {
+    let set: SetLog;
+    try {
+      set = await this.findOwnedSet(setId, userId);
+    } catch (err) {
+      await removeVideoFile(file);
+      throw err;
+    }
+    const previous = set.videoFile;
+    await this.setLogs.update(set.id, { videoFile: file });
+    await removeVideoFile(previous);
+    set.videoFile = file;
+    return set;
+  }
+
+  async removeVideo(setId: string, userId: string): Promise<void> {
+    const set = await this.findOwnedSet(setId, userId);
+    await this.setLogs.update(set.id, { videoFile: null });
+    await removeVideoFile(set.videoFile);
+  }
+
+  private async findOwnedSet(setId: string, userId: string): Promise<SetLog> {
+    const set = await this.setLogs.findOne({
+      where: { id: setId },
+      relations: { session: { user: true } },
+    });
+    if (!set) throw new NotFoundException('Set not found');
+    if (set.session.user.id !== userId) {
+      throw new ForbiddenException('Only the user who logged this set can change its video');
+    }
+    return set;
   }
 
   private async resolveProgramDay(programDayId?: string): Promise<ProgramDay | null> {
@@ -127,7 +196,11 @@ export class WorkoutsService {
     return day;
   }
 
-  private async buildSets(setInputs: SetLogInput[]): Promise<SetLog[]> {
+  /** `keepableVideos`: videos the caller may carry over (the edited session's own). */
+  private async buildSets(
+    setInputs: SetLogInput[],
+    keepableVideos: Set<string> = new Set(),
+  ): Promise<SetLog[]> {
     const byId = await this.exercises.findManyByIds([
       ...new Set(
         setInputs.flatMap((s) => [
@@ -144,6 +217,8 @@ export class WorkoutsService {
       set.reps = setInput.reps;
       set.rpe = setInput.rpe ?? null;
       set.setType = setInput.setType ?? SetType.WORKING;
+      set.videoFile =
+        setInput.videoFile && keepableVideos.has(setInput.videoFile) ? setInput.videoFile : null;
       set.drops =
         set.setType === SetType.DROP_SET
           ? (setInput.drops ?? []).map((dropInput, i) => {

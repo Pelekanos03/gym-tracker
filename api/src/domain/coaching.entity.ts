@@ -1,3 +1,4 @@
+import { DATETIME } from '../database/column-types';
 import {
   Column,
   CreateDateColumn,
@@ -37,6 +38,6 @@ export class Coaching {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ name: 'responded_at', type: 'datetime', nullable: true })
+  @Column({ name: 'responded_at', type: DATETIME, nullable: true })
   respondedAt: Date | null;
 }

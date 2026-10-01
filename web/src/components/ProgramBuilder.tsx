@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
+import { ExercisePicker } from './ExercisePicker';
 import type { Exercise, Program, SetType } from '../types';
 import { SET_TYPE_LABELS } from '../types';
 
@@ -144,7 +145,7 @@ export function ProgramBuilder({
   onCreated: () => void;
   onCancel?: () => void;
 }) {
-  const exercises = useAsync(() => api.listExercises(), []);
+  const exercises = useAsync(() => api.listExercises(ownerId), [ownerId]);
   const [name, setName] = useState(existing?.name ?? '');
   const [lengthWeeks, setLengthWeeks] = useState(existing?.lengthWeeks ?? 4);
   const [days, setDays] = useState<DayForm[]>(
@@ -362,17 +363,12 @@ export function ProgramBuilder({
                 <Fragment key={li}>
                 <tr>
                   <td>
-                    <select
+                    <ExercisePicker
+                      exercises={exercises.data ?? []}
                       value={l.exerciseId}
-                      onChange={(e) => updateLine(di, li, { exerciseId: e.target.value })}
-                    >
-                      <option value="">— pick —</option>
-                      {(exercises.data ?? []).map((ex) => (
-                        <option key={ex.id} value={ex.id}>
-                          {ex.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(id) => updateLine(di, li, { exerciseId: id })}
+                      style={{ minWidth: 160 }}
+                    />
                   </td>
                   <td>
                     <input

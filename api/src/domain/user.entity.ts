@@ -1,4 +1,5 @@
 import { Exclude } from 'class-transformer';
+import { DATETIME } from '../database/column-types';
 import {
   Column,
   CreateDateColumn,
@@ -35,6 +36,19 @@ export class User {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  /**
+   * Stamped into every session token. Bumping it (password change or
+   * reset) makes every existing session — on every device — invalid.
+   */
+  @Exclude()
+  @Column({ name: 'token_version', default: 0 })
+  tokenVersion: number;
+
+  /** When they accepted the terms & privacy policy at sign-up. */
+  @Exclude()
+  @Column({ name: 'accepted_terms_at', type: DATETIME, nullable: true })
+  acceptedTermsAt: Date | null;
 
   /** Programs this user owns (authored themselves, or copied from a friend). */
   @OneToMany(() => Program, (program) => program.owner)

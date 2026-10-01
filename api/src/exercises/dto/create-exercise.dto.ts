@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { ExerciseCategory } from '../../common/enums';
 
 export class CreateExerciseDto {
@@ -15,4 +15,8 @@ export class CreateExerciseDto {
   @IsBoolean()
   @IsOptional()
   isCompetitionLift?: boolean;
+
+  /** The user adding it — the exercise goes into their library only. */
+  @IsUUID()
+  ownerId: string;
 }

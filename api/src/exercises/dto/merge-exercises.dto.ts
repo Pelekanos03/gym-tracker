@@ -8,4 +8,8 @@ export class MergeExercisesDto {
   /** The duplicate exercise being folded into keepId, then deleted. */
   @IsUUID()
   mergeId: string;
+
+  /** Who's merging — they must own mergeId. */
+  @IsUUID()
+  userId: string;
 }
