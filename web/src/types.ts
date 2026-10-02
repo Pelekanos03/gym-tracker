@@ -25,6 +25,8 @@ export interface User {
   createdAt: string;
   /** Only on /auth/me: may read testers' feedback. */
   isAdmin?: boolean;
+  /** Your own setting (only on your own user): in-app reminder to log body weight. */
+  weightReminder?: WeightReminder;
 }
 
 export interface FeedbackItem {
@@ -44,6 +46,8 @@ export interface Exercise {
   isCompetitionLift: boolean;
   /** Who added it; null = built-in, shared by everyone. */
   ownerId: string | null;
+  /** A built-in this user took out of their library: kept for their history, left out of pickers. */
+  hidden?: boolean;
 }
 
 export interface FriendEntry {
@@ -144,6 +148,8 @@ export interface SetLog {
   supersetPartners: SupersetPartner[];
   /** Set when the set has a video; play it via videoUrl(set.id). */
   videoFile: string | null;
+  /** The lifter's comment on that video. */
+  videoNote?: string | null;
 }
 
 export interface WorkoutSession {
@@ -203,4 +209,58 @@ export interface BodyWeightEntry {
   date: string;
   /** kg */
   weight: number;
+}
+
+export type WeightReminder = 'off' | 'daily' | 'weekly';
+
+/** The built-in activities; a user can add their own, stored by name. */
+export type CardioActivity = 'run' | 'walk' | 'bike' | 'row' | 'swim' | 'elliptical' | 'stairs' | 'hiit' | 'other';
+
+export const CARDIO_LABELS: Record<CardioActivity, string> = {
+  run: 'Run',
+  walk: 'Walk',
+  bike: 'Bike',
+  row: 'Rowing',
+  swim: 'Swim',
+  elliptical: 'Elliptical',
+  stairs: 'Stairs',
+  hiit: 'HIIT',
+  other: 'Other',
+};
+
+/** "Run" for a built-in key, or the user's own activity name as typed. */
+export function cardioLabel(activity: string): string {
+  return CARDIO_LABELS[activity as CardioActivity] ?? activity;
+}
+
+export interface CardioSession {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** A built-in key or the user's own activity name — show it with cardioLabel(). */
+  activity: string;
+  durationSeconds: number;
+  distanceKm: number | null;
+  avgHeartRate: number | null;
+  calories: number | null;
+  notes: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  fromId: string;
+  toId: string;
+  /** May be empty when the message is just a file. */
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+  /** A file sent with it; fetch it from attachmentUrl(message.id). */
+  attachment: { name: string; type: string; size: number } | null;
+}
+
+export interface ChatContact {
+  user: { id: string; name: string };
+  relations: ('friend' | 'coach' | 'client')[];
+  last: { body: string; createdAt: string; fromMe: boolean } | null;
+  unread: number;
 }

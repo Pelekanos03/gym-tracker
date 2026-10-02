@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ProgramShareService } from './program-share.service';
 import { ProgramsService } from './programs.service';
 import { ShareProgramDto } from './dto/share-program.dto';
-import { toPublicUser } from '../users/user.view';
+import { toOtherUser } from '../users/user.view';
 import { CurrentUser } from '../auth/auth.decorators';
 import type { SessionUser } from '../auth/session';
 
@@ -33,7 +33,7 @@ export class ProgramShareController {
   @Get('programs/:id/shares')
   async sharesFor(@Param('id') id: string, @CurrentUser() me: SessionUser) {
     const rows = await this.shares.sharesFor(id, me.id);
-    return rows.map((r) => ({ id: r.id, sharedWith: toPublicUser(r.sharedWith) }));
+    return rows.map((r) => ({ id: r.id, sharedWith: toOtherUser(r.sharedWith) }));
   }
 
   /** Programs friends have shared with this user — usable for logging, not owned. */

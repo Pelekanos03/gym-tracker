@@ -35,7 +35,7 @@ services:
       SIGNUP_INVITE_CODE: ${SIGNUP_INVITE_CODE:-}
       # Email for password resets. Empty = the link is written to the api log instead.
       SMTP_URL: ${SMTP_URL:-}
-      MAIL_FROM: ${MAIL_FROM:-gym-app <no-reply@localhost>}
+      MAIL_FROM: ${MAIL_FROM:-Training log <no-reply@localhost>}
       # Accounts (comma-separated emails) that can read testers' feedback.
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # Largest set video in MB. 100 while sharing via a free Cloudflare tunnel.

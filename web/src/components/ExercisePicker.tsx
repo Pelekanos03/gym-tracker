@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Exercise } from '../types';
+import { Overlay } from './Overlay';
 
 /**
  * Drop-in replacement for an exercise <select>: a button showing the
@@ -86,7 +87,10 @@ function PickerSheet({
   }, []);
 
   const muscles = useMemo(
-    () => [...new Set(exercises.map((ex) => ex.primaryMuscle))].sort((a, b) => a.localeCompare(b)),
+    () =>
+      [...new Set(exercises.filter((ex) => !ex.hidden).map((ex) => ex.primaryMuscle))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [exercises],
   );
 
@@ -94,6 +98,7 @@ function PickerSheet({
     const q = query.trim().toLowerCase();
     const matches = exercises.filter(
       (ex) =>
+        (!ex.hidden || ex.id === value) &&
         (!muscle || ex.primaryMuscle === muscle) &&
         (!q || ex.name.toLowerCase().includes(q) || ex.primaryMuscle.toLowerCase().includes(q)),
     );
@@ -102,11 +107,12 @@ function PickerSheet({
       byMuscle.set(ex.primaryMuscle, [...(byMuscle.get(ex.primaryMuscle) ?? []), ex]);
     }
     return [...byMuscle.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [exercises, query, muscle]);
+  }, [exercises, query, muscle, value]);
 
   const firstMatch = groups[0]?.[1][0];
 
   return (
+    <Overlay>
     <div className="sheet-backdrop" onClick={onClose}>
       <div
         className="sheet"
@@ -187,5 +193,6 @@ function PickerSheet({
         </div>
       </div>
     </div>
+    </Overlay>
   );
 }

@@ -73,8 +73,8 @@ export class AuthService {
     try {
       await this.mailer.send(
         user.email,
-        'Reset your gym-app password',
-        `Hi ${user.name},\n\nSomeone (hopefully you) asked to reset your gym-app password.\n` +
+        'Reset your password',
+        `Hi ${user.name},\n\nSomeone (hopefully you) asked to reset your training log password.\n` +
           `Open this link within the next hour to choose a new one:\n\n${link}\n\n` +
           `If it wasn't you, ignore this email — your password stays the same.`,
       );

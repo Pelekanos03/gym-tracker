@@ -1,4 +1,5 @@
 import {
+  AfterLoad,
   Column,
   CreateDateColumn,
   Entity,
@@ -56,6 +57,16 @@ export class WorkoutSession {
 
   @OneToMany(() => SetLog, (set) => set.session, { cascade: true, eager: true })
   sets: SetLog[];
+
+  /** Sets come back in logged order, and each one's drops / superset partners in theirs. */
+  @AfterLoad()
+  sortSets(): void {
+    this.sets?.sort((a, b) => a.orderIndex - b.orderIndex || a.setNumber - b.setNumber);
+    for (const set of this.sets ?? []) {
+      set.drops?.sort((a, b) => a.orderIndex - b.orderIndex);
+      set.supersetPartners?.sort((a, b) => a.orderIndex - b.orderIndex);
+    }
+  }
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

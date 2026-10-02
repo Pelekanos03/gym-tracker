@@ -15,7 +15,7 @@ export class Mailer {
   private readonly transport: Transporter | null = process.env.SMTP_URL
     ? createTransport(process.env.SMTP_URL)
     : null;
-  private readonly from = process.env.MAIL_FROM ?? 'gym-app <no-reply@localhost>';
+  private readonly from = process.env.MAIL_FROM ?? 'Training log <no-reply@localhost>';
 
   async send(to: string, subject: string, text: string): Promise<void> {
     if (!this.transport) {

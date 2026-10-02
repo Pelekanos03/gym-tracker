@@ -14,6 +14,7 @@ import { Exercise } from '../domain/exercise.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
 import { SetLog } from '../domain/set-log.entity';
 import { SupersetPartner } from '../domain/superset-partner.entity';
+import { HiddenExercise } from '../domain/hidden-exercise.entity';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { ownExercisesUsedByOthers } from './exercise-usage';
 
@@ -42,6 +43,8 @@ export class ExercisesService implements OnApplicationBootstrap {
     private readonly setLogs: Repository<SetLog>,
     @InjectRepository(SupersetPartner)
     private readonly supersetPartners: Repository<SupersetPartner>,
+    @InjectRepository(HiddenExercise)
+    private readonly hidden: Repository<HiddenExercise>,
   ) {}
 
   /** Adds any missing built-in exercise, so a brand-new database starts with the library. */
@@ -64,8 +67,15 @@ export class ExercisesService implements OnApplicationBootstrap {
    * logged sets against — otherwise a copied program would reference
    * exercises missing from their own pickers.
    */
-  findVisibleTo(userId: string): Promise<Exercise[]> {
-    return this.exercises
+  async findVisibleTo(userId: string): Promise<(Exercise & { hidden: boolean })[]> {
+    // Built-ins the user hid are still returned (flagged), because their
+    // own old sets and programs refer to them; pickers leave them out.
+    const hiddenIds = new Set(
+      (await this.hidden.find({ where: { user: { id: userId } }, relations: { exercise: true } })).map(
+        (h) => h.exercise.id,
+      ),
+    );
+    const list = await this.exercises
       .createQueryBuilder('e')
       .where('(e.ownerId IS NULL AND e.retired = :notRetired)', { notRetired: false })
       .orWhere('e.ownerId = :userId')
@@ -97,6 +107,21 @@ export class ExercisesService implements OnApplicationBootstrap {
       .setParameter('userId', userId)
       .orderBy('e.name', 'ASC')
       .getMany();
+    return list.map((e) => Object.assign(e, { hidden: hiddenIds.has(e.id) }));
+  }
+
+  /** Takes a built-in exercise out of this user's library (own exercises get deleted instead). */
+  async hide(id: string, userId: string): Promise<void> {
+    const exercise = await this.findById(id);
+    if (exercise.ownerId !== null) {
+      throw new BadRequestException('Only built-in exercises can be hidden — delete your own instead.');
+    }
+    const exists = await this.hidden.exist({ where: { user: { id: userId }, exercise: { id } } });
+    if (!exists) await this.hidden.save(this.hidden.create({ user: { id: userId }, exercise: { id } }));
+  }
+
+  async unhide(id: string, userId: string): Promise<void> {
+    await this.hidden.delete({ user: { id: userId }, exercise: { id } });
   }
 
   async findById(id: string): Promise<Exercise> {

@@ -20,6 +20,12 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /**
+   * Private. @Exclude keeps it out of every nested object in API responses
+   * (a program's owner, a session's user…); the few places that should
+   * show it — your own account — build their response explicitly.
+   */
+  @Exclude()
   @Column({ unique: true })
   email: string;
 
@@ -49,6 +55,19 @@ export class User {
   @Exclude()
   @Column({ name: 'accepted_terms_at', type: DATETIME, nullable: true })
   acceptedTermsAt: Date | null;
+
+  /** In-app reminder to log body weight: 'off', 'daily' or 'weekly'. */
+  @Column({ name: 'weight_reminder', type: 'varchar', default: 'off' })
+  weightReminder: 'off' | 'daily' | 'weekly';
+
+  /**
+   * Their own cardio activities ("Padel"), shown as extra chips next to the
+   * built-in ones. Personal: only served to them, and never sent with the
+   * user object that friends and coaches see.
+   */
+  @Exclude()
+  @Column({ name: 'cardio_activities', type: 'simple-json', default: '[]' })
+  cardioActivities: string[];
 
   /** Programs this user owns (authored themselves, or copied from a friend). */
   @OneToMany(() => Program, (program) => program.owner)

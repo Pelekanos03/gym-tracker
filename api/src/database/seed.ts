@@ -379,6 +379,8 @@ async function run() {
             }
           }
         }
+        // Keep sets in the order they were generated (see SetLog.orderIndex).
+        session.sets.forEach((set, i) => (set.orderIndex = i + 1));
         sessions.push(session);
       }
     }

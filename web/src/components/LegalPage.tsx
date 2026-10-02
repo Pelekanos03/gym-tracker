@@ -22,7 +22,7 @@ function Privacy() {
     <>
       <h1>Privacy policy</h1>
       <p>
-        gym-app is run by {LEGAL.operator} ({LEGAL.country}), who is responsible for your data.
+        This app is run by {LEGAL.operator} ({LEGAL.country}), who is responsible for your data.
         Questions or requests: <a href={`mailto:${LEGAL.contactEmail}`}>{LEGAL.contactEmail}</a>.
       </p>
 
@@ -75,7 +75,7 @@ function Privacy() {
       </p>
 
       <h2>Age</h2>
-      <p>You need to be at least 16 to use gym-app.</p>
+      <p>You need to be at least 16 to use the app.</p>
     </>
   );
 }
@@ -85,13 +85,13 @@ function Terms() {
     <>
       <h1>Terms of use</h1>
       <p>
-        These terms are between you and {LEGAL.operator} ({LEGAL.country}), who runs gym-app. By
+        These terms are between you and {LEGAL.operator} ({LEGAL.country}), who runs this app. By
         creating an account you agree to them.
       </p>
 
       <h2>The service</h2>
       <p>
-        gym-app is a free training log in an early (beta) stage. It's provided as it is: features
+        This is a free training log in an early (beta) stage. It's provided as it is: features
         may change, and while we take care of your data, we can't promise it will always be
         available or error-free. Download your data now and then if it matters to you.
       </p>

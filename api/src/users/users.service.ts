@@ -44,6 +44,12 @@ export class UsersService {
     return this.users.save(user);
   }
 
+  async update(id: string, patch: Partial<Pick<User, 'weightReminder'>>): Promise<User> {
+    const user = await this.findById(id);
+    Object.assign(user, patch);
+    return this.users.save(user);
+  }
+
   async remove(user: User): Promise<void> {
     await this.users.remove(user);
   }
@@ -62,17 +68,17 @@ export class UsersService {
     return this.users.findOne({ where: { email: normalizeEmail(email) } });
   }
 
-  /** Simple substring search over name/email, for finding people to friend. */
+  /**
+   * Finding people to friend: part of their name, or their *whole* email.
+   * Partial email matching is deliberately not allowed — typing "gmail"
+   * would otherwise list everyone and let you guess their addresses.
+   */
   async search(q: string): Promise<User[]> {
     const query = q.trim().toLowerCase();
     if (!query) return [];
     const all = await this.users.find({ order: { name: 'ASC' } });
     return all
-      .filter(
-        (u) =>
-          u.name.toLowerCase().includes(query) ||
-          u.email.toLowerCase().includes(query),
-      )
+      .filter((u) => u.name.toLowerCase().includes(query) || u.email.toLowerCase() === query)
       .slice(0, 20);
   }
 }

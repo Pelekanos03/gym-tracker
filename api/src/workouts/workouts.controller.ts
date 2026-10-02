@@ -24,6 +24,7 @@ import { WorkoutsService } from './workouts.service';
 import { LogSessionDto } from './dto/log-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { DeleteSessionDto } from './dto/delete-session.dto';
+import { VideoNoteDto } from './dto/video-note.dto';
 
 @Controller()
 export class WorkoutsController {
@@ -113,6 +114,12 @@ export class WorkoutsController {
     if (!file) throw new BadRequestException('Attach a video in the "video" field');
     const set = await this.workouts.attachVideo(id, userId, file.filename);
     return { id: set.id, videoFile: set.videoFile };
+  }
+
+  @Patch('set-logs/:id/video-note')
+  async videoNote(@Param('id') id: string, @Body() dto: VideoNoteDto) {
+    const set = await this.workouts.setVideoNote(id, dto.userId, dto.note);
+    return { id: set.id, videoNote: set.videoNote };
   }
 
   @Delete('set-logs/:id/video')

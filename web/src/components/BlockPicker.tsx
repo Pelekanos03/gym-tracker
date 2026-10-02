@@ -70,7 +70,7 @@ export function BlockPicker({
   return (
     <div style={{ marginBottom: '.75rem' }}>
       {error && <div className="err">{error}</div>}
-      <div className="row" style={{ alignItems: 'flex-end' }}>
+      <div className="row block-row" style={{ alignItems: 'flex-end' }}>
         <div>
           <label>Block</label>
           <select

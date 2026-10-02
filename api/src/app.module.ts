@@ -15,6 +15,8 @@ import { BlocksModule } from './blocks/blocks.module';
 import { BodyWeightModule } from './body-weight/body-weight.module';
 import { AccountModule } from './account/account.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { CardioModule } from './cardio/cardio.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { FeedbackModule } from './feedback/feedback.module';
     BodyWeightModule,
     AccountModule,
     FeedbackModule,
+    CardioModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

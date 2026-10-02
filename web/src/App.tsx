@@ -2,11 +2,17 @@ import { useEffect, useState } from 'react';
 import type { User } from './types';
 import { api, SESSION_EXPIRED } from './api';
 import { Dashboard } from './components/Dashboard';
+import { TABS, type Badges } from './sections';
+import { MobileMenu, type View } from './components/MobileMenu';
+import { Logo } from './components/Logo';
 import { LoginPage } from './components/LoginPage';
 import { AccountPanel } from './components/AccountPanel';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { LegalPage } from './components/LegalPage';
+import { ReportPage } from './components/ReportPage';
 import { FeedbackButton } from './components/Feedback';
+import { UpdateBanner } from './components/UpdateBanner';
+import { versionLabel } from './version';
 
 /**
  * Only a display cache of who was last logged in, so a reload doesn't
@@ -25,13 +31,14 @@ function readCache(): User | null {
 }
 
 /** The few pages that live at their own URL (links in emails, legal pages). */
-type Route = 'app' | 'privacy' | 'terms' | 'reset-password';
+type Route = 'app' | 'privacy' | 'terms' | 'reset-password' | 'report';
 
 function routeFromPath(): Route {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path === '/privacy') return 'privacy';
   if (path === '/terms') return 'terms';
   if (path === '/reset-password') return 'reset-password';
+  if (path === '/report') return 'report';
   return 'app';
 }
 
@@ -39,7 +46,19 @@ export default function App() {
   const [route, setRoute] = useState<Route>(routeFromPath);
   const [me, setMe] = useState<User | null>(readCache);
   const [checked, setChecked] = useState(false);
-  const [showAccount, setShowAccount] = useState(false);
+  /** Which section is showing: a training tab, or the Account page. */
+  const [view, setView] = useState<View>('log');
+  const [lastTab, setLastTab] = useState<Exclude<View, 'account'>>('log');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [badges, setBadges] = useState<Badges>({ friends: 0, messages: 0 });
+  const anyBadge = badges.friends + badges.messages > 0;
+  const showAccount = view === 'account';
+
+  function show(v: View) {
+    setView(v);
+    if (v !== 'account') setLastTab(v);
+    window.scrollTo({ top: 0 });
+  }
 
   useEffect(() => {
     api
@@ -79,30 +98,48 @@ export default function App() {
 
   async function logOut() {
     await api.logout().catch(() => undefined);
-    setShowAccount(false);
+    setMenuOpen(false);
+    setView('log');
     setMe(null);
   }
 
+  const sectionLabel = showAccount ? 'Account' : TABS.find((t) => t.id === view)?.label;
+
   return (
     <div className="app">
+      <UpdateBanner />
       <div className="topbar">
+        {me && route === 'app' && (
+          <button
+            type="button"
+            className="menu-button phone-only"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+          >
+            <span />
+            <span />
+            <span />
+            {anyBadge && <i className="menu-dot" aria-label="New friend requests or messages" />}
+          </button>
+        )}
         <a
           className="brand"
           href="/"
           onClick={(e) => {
             e.preventDefault();
             goHome();
-            setShowAccount(false);
+            show(lastTab);
           }}
         >
-          <strong>gym-app</strong>
-          <span>powerlifting &amp; bodybuilding, with friends</span>
+          <Logo />
         </a>
+        {me && route === 'app' && <span className="topbar-section phone-only">{sectionLabel}</span>}
         {me && route === 'app' && (
-          <div className="row" style={{ alignItems: 'center', gap: '.5rem', flex: '0 0 auto' }}>
+          <div className="row desktop-only" style={{ alignItems: 'center', gap: '.5rem', flex: '0 0 auto' }}>
             <button
               className={`ghost small${showAccount ? ' active-ghost' : ''}`}
-              onClick={() => setShowAccount((s) => !s)}
+              onClick={() => show(showAccount ? lastTab : 'account')}
               title={`Signed in as ${me.name}`}
             >
               {showAccount ? 'Back to training' : me.name}
@@ -114,6 +151,20 @@ export default function App() {
         )}
       </div>
 
+      {me && route === 'app' && (
+        <MobileMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          me={me}
+          view={view}
+          onSelect={show}
+          onLogOut={logOut}
+          badges={badges}
+        />
+      )}
+
+      {route === 'report' && me && <ReportPage me={me} />}
+      {route === 'report' && !me && checked && <LoginPage onLoggedIn={loggedIn} />}
       {route === 'privacy' && <LegalPage page="privacy" />}
       {route === 'terms' && <LegalPage page="terms" />}
       {route === 'reset-password' && (
@@ -132,7 +183,7 @@ export default function App() {
             <AccountPanel
               me={me}
               onDeleted={() => {
-                setShowAccount(false);
+                setView('log');
                 setMe(null);
               }}
             />
@@ -140,7 +191,13 @@ export default function App() {
           {/* Kept mounted (just hidden) while on Account, so a half-logged workout isn't lost. */}
           {me && (
             <div hidden={showAccount}>
-              <Dashboard key={me.id} me={me} />
+              <Dashboard
+                key={me.id}
+                me={me}
+                tab={lastTab}
+                onTabChange={show}
+                onBadges={setBadges}
+              />
             </div>
           )}
         </>
@@ -153,6 +210,7 @@ export default function App() {
           </>
         )}
         <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+        <div className="version">Version {versionLabel()}</div>
       </footer>
     </div>
   );

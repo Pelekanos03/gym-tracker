@@ -99,6 +99,11 @@ export function relativeDay(day: string): string {
   return `${Math.floor(diff / 30)} months ago`;
 }
 
+/** Body weight always with 2 decimals: 81.25 */
+export function kg2(n: number): string {
+  return n.toFixed(2);
+}
+
 /** 1,284 / 12.9K / 1.2M */
 export function compact(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -191,4 +196,43 @@ export function setsByMuscle(
   return [...totals.entries()]
     .map(([muscle, t]) => ({ muscle, ...t }))
     .sort((a, b) => b.sets - a.sets);
+}
+
+/** "Bench Press · set 2 · 80 kg × 5" — what's in the clip. */
+export function setTitle(set: Pick<SetLog, 'exercise' | 'weight' | 'reps'>, n?: number): string {
+  const parts = [set.exercise.name];
+  if (n) parts.push(`set ${n}`);
+  parts.push(set.weight > 0 ? `${set.weight} kg × ${set.reps}` : `${set.reps} reps`);
+  return parts.join(' · ');
+}
+
+/** Is a reading due? Daily: none today. Weekly: none in the last 7 days. */
+export function weightReminderDue(
+  reminder: 'off' | 'daily' | 'weekly',
+  entries: { date: string }[],
+): boolean {
+  if (reminder === 'off') return false;
+  const last = entries[entries.length - 1];
+  if (!last) return true;
+  const days = Math.round((parseDay(todayString()).getTime() - parseDay(last.date).getTime()) / 86_400_000);
+  return reminder === 'daily' ? days >= 1 : days >= 7;
+}
+
+/** 1:05:30 / 25:30 */
+export function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
+}
+
+/** Pace for on-foot activities (5:12 /km), speed for the rest (24.5 km/h). */
+export function paceOrSpeed(activity: string, seconds: number, km: number | null): string | null {
+  if (!km || km <= 0) return null;
+  if (activity === 'run' || activity === 'walk') {
+    const perKm = Math.round(seconds / km);
+    return `${Math.floor(perKm / 60)}:${String(perKm % 60).padStart(2, '0')} /km`;
+  }
+  return `${(km / (seconds / 3600)).toFixed(1)} km/h`;
 }

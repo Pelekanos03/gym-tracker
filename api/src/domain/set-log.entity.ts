@@ -29,6 +29,14 @@ export class SetLog {
   @ManyToOne(() => Exercise, { eager: true, onDelete: 'CASCADE' })
   exercise: Exercise;
 
+  /**
+   * Position within the whole session, in the order the lifter logged or
+   * arranged the sets. The database doesn't keep rows in any order, so
+   * without this a session reads back shuffled.
+   */
+  @Column({ name: 'order_index', default: 0 })
+  orderIndex: number;
+
   @Column({ name: 'set_number', default: 1 })
   setNumber: number;
 
@@ -49,6 +57,10 @@ export class SetLog {
   /** Filename of an uploaded video of this set (under VIDEO_DIR), if any. */
   @Column({ name: 'video_file', type: 'varchar', nullable: true })
   videoFile: string | null;
+
+  /** The lifter's comment on that video ("bar drifted forward on rep 3"). Goes with the video. */
+  @Column({ name: 'video_note', type: 'text', nullable: true })
+  videoNote: string | null;
 
   /** The weight drops that followed the top set. Only a DROP_SET has any. */
   @OneToMany(() => SetDrop, (drop) => drop.set, { cascade: true, eager: true })

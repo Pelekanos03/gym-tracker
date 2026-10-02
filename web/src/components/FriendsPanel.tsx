@@ -53,15 +53,13 @@ export function FriendsPanel({
       <div className="panel">
         <h2>Your friends</h2>
         {friends.error && <div className="err">{friends.error}</div>}
-        <div className="table-scroll">
+        <div className="table-scroll people">
         <table>
           <tbody>
             {(friends.data ?? []).map((f) => (
               <tr key={f.friendshipId}>
                 <td>
                   <strong>{f.friend.name}</strong>
-                  <br />
-                  <span className="muted">{f.friend.email}</span>
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <button
@@ -94,7 +92,7 @@ export function FriendsPanel({
         {(incoming.data?.length ?? 0) > 0 && (
           <>
             <h3 style={{ marginTop: '1rem' }}>Requests</h3>
-            <div className="table-scroll">
+            <div className="table-scroll people">
             <table>
               <tbody>
                 {incoming.data!.map((r) => (
@@ -161,7 +159,7 @@ export function FriendsPanel({
         {(coachIncoming.data?.length ?? 0) > 0 && (
           <>
             <h3>Requests to coach you</h3>
-            <div className="table-scroll">
+            <div className="table-scroll people">
               <table>
                 <tbody>
                   {coachIncoming.data!.map((r) => (
@@ -218,8 +216,7 @@ export function FriendsPanel({
             {(myCoaches.data ?? []).map((c) => (
               <div
                 key={c.coachingId}
-                className="row"
-                style={{ justifyContent: 'space-between' }}
+                className="row-between"
               >
                 <span>{c.coach.name}</span>
                 <button
@@ -240,8 +237,7 @@ export function FriendsPanel({
             {(myClients.data ?? []).map((c) => (
               <div
                 key={c.coachingId}
-                className="row"
-                style={{ justifyContent: 'space-between' }}
+                className="row-between"
               >
                 <span>{c.client.name}</span>
                 <button
@@ -296,10 +292,10 @@ function AddFriend({ me, onSent }: { me: User; onSent: () => void }) {
     <div>
       {error && <div className="err">{error}</div>}
       <div className="field">
-        <label>Search by name or email</label>
+        <label>Search by name, or their full email</label>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. sam" />
       </div>
-      <div className="table-scroll">
+      <div className="table-scroll people">
       <table>
         <tbody>
           {(results.data ?? [])
@@ -308,8 +304,6 @@ function AddFriend({ me, onSent }: { me: User; onSent: () => void }) {
               <tr key={u.id}>
                 <td>
                   <strong>{u.name}</strong>
-                  <br />
-                  <span className="muted">{u.email}</span>
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <button

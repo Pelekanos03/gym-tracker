@@ -8,10 +8,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { BodyWeightEntry, ExerciseProgress, WorkoutSession } from '../types';
+import type { BodyWeightEntry, ExerciseProgress, WeightReminder, WorkoutSession } from '../types';
 import {
   compact,
   completed,
+  kg2,
   parseDay,
   sessionVolume,
   setsByMuscle,
@@ -41,12 +42,16 @@ export function StatsPanel({
   progress,
   bodyWeight,
   onBodyWeightChanged,
+  reminder,
+  onReminderChange,
 }: {
   userId: string;
   sessions: WorkoutSession[];
   progress: ExerciseProgress[];
   bodyWeight: BodyWeightEntry[];
   onBodyWeightChanged: () => void;
+  reminder: WeightReminder;
+  onReminderChange: (value: WeightReminder) => void;
 }) {
   const [metric, setMetric] = useState<WeekMetric>('volume');
   const [muscleDays, setMuscleDays] = useState(30);
@@ -121,7 +126,7 @@ export function StatsPanel({
         />
         <StatTile
           label="Body weight"
-          value={latestBw ? String(latestBw.weight) : '—'}
+          value={latestBw ? kg2(latestBw.weight) : '—'}
           unit={latestBw ? 'kg' : undefined}
           sub={latestBw ? undefined : 'log it below'}
         />
@@ -242,7 +247,13 @@ export function StatsPanel({
 
       <div className="panel" id="body-weight">
         <h2>Body weight</h2>
-        <BodyWeightPanel userId={userId} entries={bodyWeight} onChanged={onBodyWeightChanged} />
+        <BodyWeightPanel
+          userId={userId}
+          entries={bodyWeight}
+          onChanged={onBodyWeightChanged}
+          reminder={reminder}
+          onReminderChange={onReminderChange}
+        />
       </div>
     </>
   );

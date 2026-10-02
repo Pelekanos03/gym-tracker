@@ -5,14 +5,24 @@ import { AccountService } from './account.service';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/auth.decorators';
 import type { SessionUser } from '../auth/session';
-import { ChangePasswordDto, DeleteAccountDto } from './dto/account.dto';
+import { ChangePasswordDto, DeleteAccountDto, PreferencesDto } from './dto/account.dto';
+import { UsersService } from '../users/users.service';
+import { toPublicUser } from '../users/user.view';
 
 @Controller('account')
 export class AccountController {
   constructor(
     private readonly account: AccountService,
     private readonly auth: AuthService,
+    private readonly users: UsersService,
   ) {}
+
+  /** Your settings (for now: the body-weight reminder). */
+  @Post('preferences')
+  @HttpCode(200)
+  async preferences(@CurrentUser() me: SessionUser, @Body() dto: PreferencesDto) {
+    return toPublicUser(await this.users.update(me.id, { weightReminder: dto.weightReminder }));
+  }
 
   /** Other devices are logged out; this one gets a fresh session. */
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

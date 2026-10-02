@@ -26,3 +26,6 @@ npm-debug.log*
 
 # user uploads (set videos)
 uploads/
+
+# Local database backups (contain user data)
+backups/

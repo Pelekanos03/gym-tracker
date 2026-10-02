@@ -7,10 +7,12 @@ import {
   groupByExercise,
   relativeDay,
   sessionVolume,
+  setTitle,
   topSetLabel,
 } from '../stats';
 import { SessionEditor } from './SessionEditor';
-import { SetVideoButton } from './SetVideo';
+import { SetVideoButton, VideoStrip } from './SetVideo';
+import { SwipeToDelete } from './SwipeToDelete';
 
 /** Drops / superset partners in the order they were done (the API doesn't guarantee it). */
 function byOrder<T extends { orderIndex: number }>(items: T[] | undefined): T[] {
@@ -29,11 +31,16 @@ export function SessionList({
   onDelete,
   onChanged,
   initiallyOpen = 1,
+  activeSessionId,
+  onContinue,
 }: {
   sessions: WorkoutSession[];
   userId?: string;
   onDelete?: (id: string) => Promise<void>;
   onChanged?: () => void;
+  /** The lifter's own list only: the session being logged right now, and "carry on with this one". */
+  activeSessionId?: string;
+  onContinue?: (session: WorkoutSession) => void;
   /** How many of the newest sessions start expanded. */
   initiallyOpen?: number;
 }) {
@@ -65,6 +72,8 @@ export function SessionList({
           userId={userId}
           onDelete={onDelete}
           onChanged={onChanged}
+          active={s.id === activeSessionId}
+          onContinue={onContinue}
         />
       ))}
     </div>
@@ -78,6 +87,8 @@ function SessionCard({
   userId,
   onDelete,
   onChanged,
+  active,
+  onContinue,
 }: {
   session: WorkoutSession;
   open: boolean;
@@ -85,6 +96,8 @@ function SessionCard({
   userId?: string;
   onDelete?: (id: string) => Promise<void>;
   onChanged?: () => void;
+  active?: boolean;
+  onContinue?: (session: WorkoutSession) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -94,6 +107,13 @@ function SessionCard({
 
   return (
     <article className={`session-card${open ? ' open' : ''}`}>
+      <SwipeToDelete
+        onDelete={() => {
+          if (!onDelete) return;
+          if (!open) onToggle();
+          setConfirming(true);
+        }}
+      >
       <button type="button" className="session-head" onClick={onToggle} aria-expanded={open}>
         <div className="session-date">
           <strong>{formatDay(s.date)}</strong>
@@ -119,12 +139,21 @@ function SessionCard({
           ▾
         </span>
       </button>
+      </SwipeToDelete>
 
       {s.status !== 'COMPLETED' && <span className="tag">{s.status.toLowerCase()}</span>}
+      {active && <span className="tag live">in progress</span>}
       {s.programDay && (
         <span className="muted session-plan">{s.programDay.name}</span>
       )}
       {s.notes && <p className="session-notes">“{s.notes}”</p>}
+
+      {/* Videos up front, so they're seen without opening every set. */}
+      <VideoStrip
+        sets={groups.flatMap((g) => g.sets.map((set, i) => ({ set, n: i + 1 })))}
+        userId={userId}
+        onChanged={onChanged}
+      />
 
       {!open && (
         <ul className="session-summary">
@@ -176,13 +205,19 @@ function SessionCard({
                 </>
               ) : (
                 <>
-                  {userId && (
+                  {onContinue && (
+                    <button className="small" onClick={() => onContinue(s)}>
+                      {active ? 'Open in Workout' : 'Continue workout'}
+                    </button>
+                  )}
+                  {/* The workout being logged is edited in the Workout form, not here — two editors would overwrite each other. */}
+                  {userId && !active && (
                     <button className="ghost small" onClick={() => setEditing((e) => !e)}>
                       {editing ? 'Close editor' : 'Edit'}
                     </button>
                   )}
                   {onDelete && (
-                    <button className="ghost small" onClick={() => setConfirming(true)}>
+                    <button className="ghost small desktop-only" onClick={() => setConfirming(true)}>
                       Delete
                     </button>
                   )}
@@ -191,7 +226,7 @@ function SessionCard({
             </div>
           )}
 
-          {editing && userId && (
+          {editing && userId && !active && (
             <SessionEditor
               session={s}
               userId={userId}
@@ -234,11 +269,16 @@ function SetLine({
           <SetVideoButton
             setId={set.id}
             videoFile={set.videoFile}
+            videoNote={set.videoNote}
             userId={userId}
+            title={setTitle(set, n)}
             onChanged={onChanged}
           />
         )}
       </div>
+      {set.videoFile && set.videoNote && (
+        <div className="set-line sub video-note-line">💬 “{set.videoNote}”</div>
+      )}
       {byOrder(set.drops).map((d) => (
         <div key={d.id} className="set-line sub muted">
           ↳ drop {d.orderIndex}: {d.weight} kg × {d.reps}

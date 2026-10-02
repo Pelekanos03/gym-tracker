@@ -6,7 +6,7 @@ import { CurrentUser, Public } from '../auth/auth.decorators';
 import type { SessionUser } from '../auth/session';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { toPublicUser } from './user.view';
+import { toOtherUser, toPublicUser } from './user.view';
 
 @Controller('users')
 export class UsersController {
@@ -38,11 +38,12 @@ export class UsersController {
   async list(@CurrentUser() me: SessionUser, @Query('q') q?: string) {
     if (!q || q.trim().length < 2) return [];
     const users = await this.users.search(q);
-    return users.filter((u) => u.id !== me.id).map(toPublicUser);
+    return users.filter((u) => u.id !== me.id).map(toOtherUser);
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return toPublicUser(await this.users.findById(id));
+  async get(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    const user = await this.users.findById(id);
+    return id === me.id ? toPublicUser(user) : toOtherUser(user);
   }
 }

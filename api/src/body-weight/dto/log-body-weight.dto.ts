@@ -4,7 +4,7 @@ export class LogBodyWeightDto {
   @IsDateString()
   date: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(20)
   @Max(400)
   weight: number;

@@ -15,11 +15,17 @@ export function HistoryPanel({
   userId,
   onChanged,
   onDelete,
+  activeSessionId,
+  onContinue,
 }: {
   sessions: WorkoutSession[];
   userId: string;
   onChanged: () => void;
   onDelete: (id: string) => Promise<void>;
+  /** The session the Workout form is saving into right now. */
+  activeSessionId?: string;
+  /** Load a session back into the Workout form to carry on with it. */
+  onContinue: (session: WorkoutSession) => void;
 }) {
   const [query, setQuery] = useState('');
   const [day, setDay] = useState<string>();
@@ -73,6 +79,8 @@ export function HistoryPanel({
           userId={userId}
           onChanged={onChanged}
           onDelete={onDelete}
+          activeSessionId={activeSessionId}
+          onContinue={onContinue}
         />
       </div>
     </>

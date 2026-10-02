@@ -9,8 +9,12 @@ import type {
   FriendRequest,
   Program,
   BodyWeightEntry,
+  CardioSession,
+  ChatContact,
+  ChatMessage,
   TrainingBlock,
   User,
+  WeightReminder,
   WorkoutSession,
 } from './types';
 
@@ -43,6 +47,47 @@ export const SESSION_EXPIRED = 'gym-app:session-expired';
  */
 export function videoUrl(setId: string): string {
   return `${BASE}/set-logs/${setId}/video`;
+}
+
+/** A file sent in chat; only the two people in that chat can open it. */
+export function attachmentUrl(messageId: string): string {
+  return `${BASE}/messages/${messageId}/attachment`;
+}
+
+/**
+ * Multipart POST with upload progress (XHR — fetch can't report it).
+ * Shared by set videos and chat files.
+ */
+function uploadForm<T>(
+  path: string,
+  form: FormData,
+  onProgress?: (fraction: number) => void,
+  tooBig = 'That file is too big.',
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', BASE + path);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      let body: { message?: string } = {};
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // non-JSON error page
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as T);
+      else
+        reject(
+          new Error(
+            xhr.status === 413
+              ? tooBig
+              : (body.message ?? `Upload failed (${xhr.status})`),
+          ),
+        );
+    };
+    xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
+    xhr.send(form);
+  });
 }
 
 /**
@@ -86,6 +131,9 @@ export const api = {
   listFeedback: () => request<FeedbackItem[]>('/feedback'),
 
   // --- account ---
+  setPreferences: (prefs: { weightReminder: WeightReminder }) =>
+    request<User>('/account/preferences', { method: 'POST', body: JSON.stringify(prefs) }),
+
   changePassword: (currentPassword: string, newPassword: string) =>
     request('/account/password', {
       method: 'POST',
@@ -118,6 +166,11 @@ export const api = {
 
   deleteExercise: (id: string) => request(`/exercises/${id}`, { method: 'DELETE' }),
 
+  /** Built-ins can't be deleted (they're shared) — hide one from your own library instead. */
+  hideExercise: (id: string) => request(`/exercises/${id}/hide`, { method: 'POST' }),
+
+  unhideExercise: (id: string) => request(`/exercises/${id}/hide`, { method: 'DELETE' }),
+
   mergeExercisesPreview: (keepId: string, mergeId: string, userId: string) =>
     request<{ programExerciseCount: number; setLogCount: number }>(
       `/exercises/merge-preview?keepId=${keepId}&mergeId=${mergeId}&userId=${userId}`,
@@ -128,6 +181,65 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ keepId, mergeId, userId }),
     }),
+
+  // --- messages ---
+  chatContacts: () => request<ChatContact[]>('/messages/contacts'),
+
+  unreadMessages: () => request<{ count: number }>('/messages/unread-count'),
+
+  /** Oldest → newest; `before` (ISO time) loads the page before that. Marks their messages read. */
+  conversation: (otherId: string, before?: string) =>
+    request<ChatMessage[]>(`/messages/with/${otherId}${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+
+  sendMessage: (toUserId: string, body: string) =>
+    request<ChatMessage>('/messages', { method: 'POST', body: JSON.stringify({ toUserId, body }) }),
+
+  /** A file (photo, PDF, document…) with optional text. */
+  sendAttachment: (toUserId: string, file: File, body: string, onProgress?: (fraction: number) => void) => {
+    const form = new FormData();
+    form.append('toUserId', toUserId);
+    if (body) form.append('body', body);
+    form.append('file', file);
+    return uploadForm<ChatMessage>('/messages/attachment', form, onProgress);
+  },
+
+  // --- cardio ---
+  cardio: (userId: string) => request<CardioSession[]>(`/users/${userId}/cardio`),
+
+  saveCardio: (userId: string, data: Omit<CardioSession, 'id'>, id?: string) =>
+    request<CardioSession>(`/users/${userId}/cardio${id ? `/${id}` : ''}`, {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteCardio: (userId: string, id: string) =>
+    request(`/users/${userId}/cardio/${id}`, { method: 'DELETE' }),
+
+  /** Your own activities ("Padel") — personal, nobody else sees them. */
+  cardioActivities: (userId: string) => request<string[]>(`/users/${userId}/cardio/activities`),
+
+  /** Replaces your list (add or remove one); returns it as saved. */
+  setCardioActivities: (userId: string, activities: string[]) =>
+    request<string[]>(`/users/${userId}/cardio/activities`, {
+      method: 'PUT',
+      body: JSON.stringify({ activities }),
+    }),
+
+  // --- workout in progress ---
+  getWorkoutDraft: () => request<{ data: unknown; updatedAt: string } | null>('/workout-draft'),
+
+  /**
+   * keepalive lets the save finish even if the page is being closed —
+   * so the very last tick before the phone locks still lands.
+   */
+  saveWorkoutDraft: (data: unknown) =>
+    request<{ ok: boolean; updatedAt?: string }>('/workout-draft', {
+      method: 'PUT',
+      body: JSON.stringify({ data }),
+      keepalive: true,
+    }),
+
+  clearWorkoutDraft: () => request('/workout-draft', { method: 'DELETE', keepalive: true }),
 
   // --- set videos ---
   /**
@@ -140,32 +252,22 @@ export const api = {
     userId: string,
     file: File,
     onProgress?: (fraction: number) => void,
-  ) =>
-    new Promise<{ id: string; videoFile: string }>((resolve, reject) => {
-      const form = new FormData();
-      form.append('video', file);
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${BASE}/set-logs/${setId}/video?userId=${userId}`);
-      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-      xhr.onload = () => {
-        let body: { message?: string } = {};
-        try {
-          body = JSON.parse(xhr.responseText);
-        } catch {
-          // non-JSON error page
-        }
-        if (xhr.status >= 200 && xhr.status < 300) resolve(body as { id: string; videoFile: string });
-        else
-          reject(
-            new Error(
-              xhr.status === 413
-                ? 'That video is too big — try a shorter clip.'
-                : (body.message ?? `Upload failed (${xhr.status})`),
-            ),
-          );
-      };
-      xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
-      xhr.send(form);
+  ) => {
+    const form = new FormData();
+    form.append('video', file);
+    return uploadForm<{ id: string; videoFile: string }>(
+      `/set-logs/${setId}/video?userId=${userId}`,
+      form,
+      onProgress,
+      'That video is too big — try a shorter clip.',
+    );
+  },
+
+  /** The lifter's comment on a set's video; '' clears it. */
+  setVideoNote: (setId: string, userId: string, note: string) =>
+    request<{ id: string; videoNote: string | null }>(`/set-logs/${setId}/video-note`, {
+      method: 'PATCH',
+      body: JSON.stringify({ userId, note }),
     }),
 
   removeSetVideo: (setId: string, userId: string) =>

@@ -15,6 +15,10 @@ import { TrainingBlock } from '../domain/training-block.entity';
 import { BodyWeightEntry } from '../domain/body-weight-entry.entity';
 import { PasswordResetToken } from '../domain/password-reset-token.entity';
 import { Feedback } from '../domain/feedback.entity';
+import { HiddenExercise } from '../domain/hidden-exercise.entity';
+import { WorkoutDraft } from '../domain/workout-draft.entity';
+import { CardioSession } from '../domain/cardio-session.entity';
+import { Message } from '../domain/message.entity';
 import { isPostgres } from './column-types';
 
 const entities = [
@@ -34,6 +38,10 @@ const entities = [
   BodyWeightEntry,
   PasswordResetToken,
   Feedback,
+  HiddenExercise,
+  WorkoutDraft,
+  CardioSession,
+  Message,
 ];
 
 /**

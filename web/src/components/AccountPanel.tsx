@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import type { User } from '../types';
 import { FeedbackInbox } from './Feedback';
+import { bodyWeightCsv, cardioCsv, download, workoutsCsv } from '../exportData';
 
 /** Your account: change password, download your data, delete everything. */
 export function AccountPanel({ me, onDeleted }: { me: User; onDeleted: () => void }) {
@@ -15,17 +16,7 @@ export function AccountPanel({ me, onDeleted }: { me: User; onDeleted: () => voi
       </div>
       {me.isAdmin && <FeedbackInbox />}
       <ChangePassword />
-      <div className="panel">
-        <h2>Download your data</h2>
-        <p className="muted">
-          A JSON file with everything stored about you: workouts and sets, programs, body
-          weight, your exercises, friends and coaching links. Videos aren't included in the file
-          (they're too large) — it notes which sets have one.
-        </p>
-        <a className="button-link" href="/api/account/export" download>
-          Download my data
-        </a>
-      </div>
+      <DownloadData me={me} />
       <DeleteAccount onDeleted={onDeleted} />
     </>
   );
@@ -60,7 +51,7 @@ function ChangePassword() {
       <h2>Change password</h2>
       {error && <div className="err">{error}</div>}
       {ok && <p className="pr">Password changed. Other devices have been logged out.</p>}
-      <div className="row">
+      <div className="row stack-on-phone">
         <div>
           <label>Current password</label>
           <input
@@ -148,6 +139,58 @@ function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+/** Your data as CSV (spreadsheets), a printable PDF report, or everything as JSON. */
+function DownloadData({ me }: { me: User }) {
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  async function csv(kind: 'workouts' | 'bodyweight' | 'cardio') {
+    setBusy(kind);
+    setError(undefined);
+    try {
+      const [name, content] =
+        kind === 'workouts'
+          ? workoutsCsv(await api.myHistory(me.id))
+          : kind === 'bodyweight'
+            ? bodyWeightCsv(await api.bodyWeight(me.id))
+            : cardioCsv(await api.cardio(me.id));
+      download(name, content);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <h2>Download your data</h2>
+      <p className="muted">
+        Spreadsheet files (CSV) open in Excel, Google Sheets or Numbers. The report is a printable page you can save as
+        a PDF.
+      </p>
+      {error && <div className="err">{error}</div>}
+      <div className="download-grid">
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => csv('workouts')}>
+          {busy === 'workouts' ? 'Preparing…' : 'Workouts (CSV)'}
+        </button>
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => csv('bodyweight')}>
+          {busy === 'bodyweight' ? 'Preparing…' : 'Body weight (CSV)'}
+        </button>
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => csv('cardio')}>
+          {busy === 'cardio' ? 'Preparing…' : 'Cardio (CSV)'}
+        </button>
+        <a className="button-link" href="/report" target="_blank" rel="noreferrer">
+          Report (PDF)
+        </a>
+        <a className="button-link ghost-link" href="/api/account/export" download>
+          Everything (JSON)
+        </a>
+      </div>
     </div>
   );
 }

@@ -1,267 +1,349 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import type { Exercise, ExerciseCategory } from '../types';
+import { ExercisePicker } from './ExercisePicker';
 
 /**
- * Your exercise library: the built-in movements everyone shares, plus the
- * ones you've added. What you add is yours alone — friends don't see it in
- * their library. (Other tabs pick up a newly added exercise next time
- * they're opened — each fetches its own copy.)
+ * Your exercise library: the built-in movements plus the ones you added.
+ * Tap any exercise for what you can do with it — delete or merge your own,
+ * or take a built-in out of your library (built-ins are shared, so they're
+ * hidden for you rather than deleted for everyone).
  */
 export function ExerciseLibrary({ userId }: { userId: string }) {
   const exercises = useAsync(() => api.listExercises(userId), [userId]);
-  const [open, setOpen] = useState(false);
-  const [mergeOpen, setMergeOpen] = useState(false);
-  const byMuscle = groupByMuscle(exercises.data ?? []);
+  const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<Exercise>();
+  const [showHidden, setShowHidden] = useState(false);
+  const [query, setQuery] = useState('');
+  const [muscle, setMuscle] = useState<string>();
+  const all = exercises.data ?? [];
+  const visible = all.filter((ex) => !ex.hidden);
+  const hidden = all.filter((ex) => ex.hidden);
+  const allMuscles = Object.keys(groupByMuscle(visible));
+  // Same search + body-part filter as the exercise picker.
+  const q = query.trim().toLowerCase();
+  const shown = visible.filter(
+    (ex) =>
+      (!muscle || ex.primaryMuscle === muscle) &&
+      (!q || ex.name.toLowerCase().includes(q) || ex.primaryMuscle.toLowerCase().includes(q)),
+  );
+  const byMuscle = groupByMuscle(shown);
 
   return (
     <div className="panel">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="panel-head">
         <h2>Exercise library</h2>
-        <div className="row" style={{ flex: '0 0 auto' }}>
-          <button className="ghost small" onClick={() => setMergeOpen((o) => !o)}>
-            {mergeOpen ? 'Close' : 'Merge duplicates'}
-          </button>
-          <button className="ghost small" onClick={() => setOpen((o) => !o)}>
-            {open ? 'Close' : '+ Add exercise'}
-          </button>
-        </div>
+        <button className="ghost small" onClick={() => setAdding((o) => !o)}>
+          {adding ? 'Close' : '+ Add exercise'}
+        </button>
       </div>
+      <p className="muted library-hint">Tap an exercise to delete, merge or hide it.</p>
+
+      <input
+        type="search"
+        className="library-search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search exercises…"
+        aria-label="Search exercises"
+      />
+      <div className="chips scroll-x library-chips">
+        <button type="button" className={`chip${muscle ? '' : ' active'}`} onClick={() => setMuscle(undefined)}>
+          All
+        </button>
+        {allMuscles.map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`chip${muscle === m ? ' active' : ''}`}
+            onClick={() => setMuscle(muscle === m ? undefined : m)}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 && visible.length > 0 && (
+        <p className="muted">No exercise matches — try another word, or add it with "+ Add exercise".</p>
+      )}
 
       {exercises.error && <div className="err">{exercises.error}</div>}
 
-      {mergeOpen && (
-        <MergeExercisesTool
-          userId={userId}
-          exercises={exercises.data ?? []}
-          onMerged={exercises.reload}
-        />
-      )}
-
-      {open && (
+      {adding && (
         <AddExerciseForm
           userId={userId}
-          muscles={Object.keys(byMuscle)}
+          muscles={allMuscles}
           onCreated={() => {
-            setOpen(false);
+            setAdding(false);
             exercises.reload();
           }}
         />
       )}
 
-      <YourExercises
-        exercises={(exercises.data ?? []).filter((ex) => ex.ownerId === userId)}
-        onDeleted={exercises.reload}
-      />
-
       {Object.entries(byMuscle).map(([muscle, list]) => (
-        <div key={muscle} style={{ marginTop: '.75rem' }}>
-          <h3 style={{ marginBottom: '.3rem' }}>{muscle}</h3>
-          <div className="row" style={{ gap: '.4rem' }}>
+        <div key={muscle} className="library-group">
+          <h3>{muscle}</h3>
+          <div className="library-list">
             {list.map((ex) => (
-              <span
-                key={ex.id}
-                className="tag"
-                title={ex.ownerId === userId ? 'Added by you — only you see it' : undefined}
-              >
-                {ex.name}
-                {ex.isCompetitionLift && <span className="muted"> · comp</span>}
-                {ex.ownerId === userId && <span className="muted"> · yours</span>}
-              </span>
+              <button key={ex.id} type="button" className="library-item" onClick={() => setSelected(ex)}>
+                <span>{ex.name}</span>
+                <span className="library-tags">
+                  {ex.isCompetitionLift && <span className="muted">comp</span>}
+                  {ex.ownerId === userId && <span className="tag">yours</span>}
+                  <span className="muted" aria-hidden>
+                    ›
+                  </span>
+                </span>
+              </button>
             ))}
           </div>
         </div>
       ))}
+
+      {hidden.length > 0 && (
+        <div className="library-group">
+          <button type="button" className="link-button" style={{ margin: '.75rem 0 0' }} onClick={() => setShowHidden((s) => !s)}>
+            {showHidden ? 'Hide' : 'Show'} {hidden.length} exercise{hidden.length === 1 ? '' : 's'} you removed
+          </button>
+          {showHidden && (
+            <div className="library-list">
+              {hidden.map((ex) => (
+                <div key={ex.id} className="library-item static">
+                  <span className="muted">{ex.name}</span>
+                  <button
+                    type="button"
+                    className="ghost small"
+                    onClick={async () => {
+                      await api.unhideExercise(ex.id);
+                      exercises.reload();
+                    }}
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {selected && (
+        <ExerciseActions
+          exercise={selected}
+          userId={userId}
+          exercises={visible}
+          onClose={() => setSelected(undefined)}
+          onChanged={() => {
+            setSelected(undefined);
+            exercises.reload();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Loose match so "Bench" and "Bench Press" surface as a hint — not used to act automatically, just to help you spot pairs worth merging. */
-function looksLikeSameExercise(a: string, b: string): boolean {
-  const na = a.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const nb = b.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  if (!na || !nb) return false;
-  return na === nb || na.startsWith(nb + ' ') || nb.startsWith(na + ' ');
-}
+type Step = 'menu' | 'delete' | 'merge' | 'hide';
 
-function findPossibleDuplicates(exercises: Exercise[]): [Exercise, Exercise][] {
-  const pairs: [Exercise, Exercise][] = [];
-  for (let i = 0; i < exercises.length; i++) {
-    for (let j = i + 1; j < exercises.length; j++) {
-      if (looksLikeSameExercise(exercises[i].name, exercises[j].name)) {
-        pairs.push([exercises[i], exercises[j]]);
-      }
+/** The options for one exercise, in a sheet (bottom sheet on a phone). */
+function ExerciseActions({
+  exercise,
+  userId,
+  exercises,
+  onClose,
+  onChanged,
+}: {
+  exercise: Exercise;
+  userId: string;
+  exercises: Exercise[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const mine = exercise.ownerId === userId;
+  const [step, setStep] = useState<Step>('menu');
+  const [error, setError] = useState<string>();
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  async function hide() {
+    setError(undefined);
+    try {
+      await api.hideExercise(exercise.id);
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
-  return pairs;
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet action-sheet" role="dialog" aria-label={exercise.name} onClick={(e) => e.stopPropagation()}>
+        <div className="action-sheet-head">
+          <div>
+            <strong>{exercise.name}</strong>
+            <div className="muted" style={{ fontSize: '.8rem' }}>
+              {exercise.primaryMuscle} · {exercise.category === 'COMPOUND' ? 'Compound' : 'Isolation'} ·{' '}
+              {mine ? 'added by you' : 'built-in'}
+            </div>
+          </div>
+          <button type="button" className="ghost small" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {error && <div className="err">{error}</div>}
+
+        {step === 'menu' && (
+          <div className="action-list">
+            {mine ? (
+              <>
+                <button type="button" className="action-item" onClick={() => setStep('merge')}>
+                  Merge into another exercise…
+                  <span className="muted">Same movement under another name? Move its sets there.</span>
+                </button>
+                <button type="button" className="action-item danger-text" onClick={() => setStep('delete')}>
+                  Delete exercise…
+                  <span className="muted">Removes it, and asks before deleting any sets that use it.</span>
+                </button>
+              </>
+            ) : (
+              <button type="button" className="action-item danger-text" onClick={() => setStep('hide')}>
+                Remove from my library…
+                <span className="muted">
+                  It's a built-in shared by everyone, so it's only hidden for you. Your past sets keep it.
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {step === 'hide' && (
+          <div className="action-step">
+            <p>
+              Hide <strong>{exercise.name}</strong> from your library and exercise pickers? Your past
+              workouts and programs that use it stay as they are, and you can restore it any time from
+              the bottom of the library.
+            </p>
+            <div className="row stack-on-phone">
+              <button type="button" className="danger" onClick={hide}>
+                Remove from my library
+              </button>
+              <button type="button" className="ghost" onClick={() => setStep('menu')}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'delete' && (
+          <div className="action-step">
+            <ConfirmDeleteExercise exercise={exercise} onCancel={() => setStep('menu')} onDeleted={onChanged} />
+          </div>
+        )}
+
+        {step === 'merge' && (
+          <div className="action-step">
+            <MergeInto exercise={exercise} userId={userId} exercises={exercises} onBack={() => setStep('menu')} onMerged={onChanged} />
+          </div>
+        )}
+
+        <button type="button" className="ghost action-close" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
- * Merging is irreversible (every program line and logged set on the
- * duplicate is repointed, then it's deleted), so this always shows a
- * preview of what will move and requires an explicit confirmation checkbox
- * before the "Merge now" button is even clickable.
+ * Folds one of your exercises into another (built-in or yours): every
+ * set and program line moves across, then yours is deleted. Shows exactly
+ * what will move and needs a tick before it runs — it can't be undone.
  */
-function MergeExercisesTool({
+function MergeInto({
+  exercise,
   userId,
   exercises,
+  onBack,
   onMerged,
 }: {
+  exercise: Exercise;
   userId: string;
   exercises: Exercise[];
+  onBack: () => void;
   onMerged: () => void;
 }) {
   const [keepId, setKeepId] = useState('');
-  const [mergeId, setMergeId] = useState('');
   const [preview, setPreview] = useState<{ programExerciseCount: number; setLogCount: number }>();
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string>();
-  const [done, setDone] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const keep = exercises.find((ex) => ex.id === keepId);
 
-  // Only your own additions can be merged away (deleted); built-in and
-  // friends' exercises can still be the one you keep.
-  const mine = useMemo(() => exercises.filter((ex) => ex.ownerId === userId), [exercises, userId]);
-  const possibleDuplicates = useMemo(
-    () =>
-      findPossibleDuplicates(exercises).filter(
-        ([a, b]) => a.ownerId === userId || b.ownerId === userId,
-      ),
-    [exercises, userId],
-  );
-  const keepEx = exercises.find((ex) => ex.id === keepId);
-  const mergeEx = exercises.find((ex) => ex.id === mergeId);
-
-  function reset() {
+  async function pick(id: string) {
+    setKeepId(id);
     setPreview(undefined);
     setConfirmed(false);
     setError(undefined);
-  }
-
-  async function loadPreview() {
-    reset();
-    if (!keepId || !mergeId) return;
-    if (keepId === mergeId) {
-      setError('Pick two different exercises.');
-      return;
-    }
     try {
-      setPreview(await api.mergeExercisesPreview(keepId, mergeId, userId));
+      setPreview(await api.mergeExercisesPreview(id, exercise.id, userId));
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
-  async function confirmMerge() {
+  async function merge() {
     setBusy(true);
     setError(undefined);
     try {
-      const kept = await api.mergeExercises(keepId, mergeId, userId);
-      setDone(kept.name);
-      setKeepId('');
-      setMergeId('');
-      reset();
+      await api.mergeExercises(keepId, exercise.id, userId);
       onMerged();
     } catch (err) {
       setError((err as Error).message);
-    } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="panel" style={{ background: 'var(--panel-2)', marginTop: '.75rem' }}>
-      <h3>Merge duplicate exercises</h3>
-      <p className="muted" style={{ fontSize: '.85em' }}>
-        If you added a movement that's already in the library under a different name (e.g.
-        "Bench" vs "Bench Press"), merge your copy into it. Every program line and logged set
-        on the duplicate moves to the one you keep, then the duplicate is deleted — this can't
-        be undone. You can only merge away exercises you added yourself.
-      </p>
-
-      {possibleDuplicates.length > 0 && (
-        <p className="muted" style={{ fontSize: '.85em' }}>
-          Possible duplicates:{' '}
-          {possibleDuplicates.map(([a, b], i) => (
-            <span key={a.id + b.id}>
-              {i > 0 && ', '}"{a.name}" / "{b.name}"
-            </span>
-          ))}
-        </p>
-      )}
-
-      {error && <div className="err">{error}</div>}
-      {done && <p className="pr">Merged — kept "{done}".</p>}
-
-      <div className="row" style={{ alignItems: 'flex-end' }}>
-        <div>
-          <label>Keep this one</label>
-          <select
-            value={keepId}
-            onChange={(e) => {
-              setKeepId(e.target.value);
-              reset();
-            }}
-          >
-            <option value="">— pick —</option>
-            {exercises.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>Merge this one into it (deleted after)</label>
-          <select
-            value={mergeId}
-            onChange={(e) => {
-              setMergeId(e.target.value);
-              reset();
-            }}
-          >
-            <option value="">— pick —</option>
-            {mine.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ flex: '0 0 auto' }}>
-          <button type="button" onClick={loadPreview} disabled={!keepId || !mergeId}>
-            Preview merge
-          </button>
-        </div>
-      </div>
-
-      {preview && keepEx && mergeEx && (
-        <div className="panel" style={{ marginTop: '.75rem', background: 'var(--panel)' }}>
+    <>
+      <label>Merge "{exercise.name}" into</label>
+      <ExercisePicker
+        exercises={exercises.filter((ex) => ex.id !== exercise.id)}
+        value={keepId}
+        onChange={pick}
+        placeholder="Pick the exercise to keep"
+      />
+      {error && <div className="err" style={{ marginTop: '.5rem' }}>{error}</div>}
+      {preview && keep && (
+        <>
           <p>
-            This will move <strong>{preview.programExerciseCount}</strong> program line(s) and{' '}
-            <strong>{preview.setLogCount}</strong> logged set(s) from "{mergeEx.name}" onto "
-            {keepEx.name}", then permanently delete "{mergeEx.name}".
+            <strong>{preview.setLogCount}</strong> logged set(s) and{' '}
+            <strong>{preview.programExerciseCount}</strong> program line(s) move from "{exercise.name}" to "
+            {keep.name}", then "{exercise.name}" is deleted. This can't be undone.
           </p>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            I'm sure "{mergeEx.name}" and "{keepEx.name}" are the same exercise.
+          <label className="checkbox-row">
+            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+            <span>
+              "{exercise.name}" and "{keep.name}" are the same exercise.
+            </span>
           </label>
-          <button
-            type="button"
-            style={{ marginTop: '.5rem' }}
-            disabled={!confirmed || busy}
-            onClick={confirmMerge}
-          >
-            Merge now
-          </button>
-        </div>
+        </>
       )}
-    </div>
+      <div className="row stack-on-phone" style={{ marginTop: '.5rem' }}>
+        <button type="button" disabled={!preview || !confirmed || busy} onClick={merge}>
+          {busy ? 'Merging…' : 'Merge'}
+        </button>
+        <button type="button" className="ghost" onClick={onBack}>
+          Back
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -359,41 +441,6 @@ function AddExerciseForm({
         Add exercise
       </button>
     </form>
-  );
-}
-
-/** The exercises you added, each deletable after a confirmation that says what goes with it. */
-function YourExercises({ exercises, onDeleted }: { exercises: Exercise[]; onDeleted: () => void }) {
-  const [confirming, setConfirming] = useState<string>();
-  if (exercises.length === 0) return null;
-  return (
-    <div className="your-exercises">
-      <h3>Added by you</h3>
-      {[...exercises]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((ex) =>
-          confirming === ex.id ? (
-            <ConfirmDeleteExercise
-              key={ex.id}
-              exercise={ex}
-              onCancel={() => setConfirming(undefined)}
-              onDeleted={() => {
-                setConfirming(undefined);
-                onDeleted();
-              }}
-            />
-          ) : (
-            <div key={ex.id} className="your-exercise-row">
-              <span>
-                {ex.name} <span className="muted">· {ex.primaryMuscle}</span>
-              </span>
-              <button type="button" className="ghost small" onClick={() => setConfirming(ex.id)}>
-                Delete
-              </button>
-            </div>
-          ),
-        )}
-    </div>
   );
 }
 

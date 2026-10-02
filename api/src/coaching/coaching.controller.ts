@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/commo
 import { CoachingService } from './coaching.service';
 import { RequestCoachingDto } from './dto/request-coaching.dto';
 import { RespondCoachingDto } from './dto/respond-coaching.dto';
-import { toPublicUser } from '../users/user.view';
+import { toOtherUser } from '../users/user.view';
 
 @Controller()
 export class CoachingController {
@@ -42,8 +42,8 @@ export class CoachingController {
     return requests.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
-      coach: toPublicUser(r.coach),
-      client: toPublicUser(r.client),
+      coach: toOtherUser(r.coach),
+      client: toOtherUser(r.client),
     }));
   }
 
@@ -51,13 +51,13 @@ export class CoachingController {
   @Get('users/:userId/coaches')
   async coaches(@Param('userId') userId: string) {
     const rows = await this.coaching.coachesOf(userId);
-    return rows.map((r) => ({ coachingId: r.coachingId, coach: toPublicUser(r.coach) }));
+    return rows.map((r) => ({ coachingId: r.coachingId, coach: toOtherUser(r.coach) }));
   }
 
   /** Who this user coaches. */
   @Get('users/:userId/clients')
   async clients(@Param('userId') userId: string) {
     const rows = await this.coaching.clientsOf(userId);
-    return rows.map((r) => ({ coachingId: r.coachingId, client: toPublicUser(r.client) }));
+    return rows.map((r) => ({ coachingId: r.coachingId, client: toOtherUser(r.client) }));
   }
 }

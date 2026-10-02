@@ -9,9 +9,11 @@ import { Exercise } from '../domain/exercise.entity';
 import { Friendship } from '../domain/friendship.entity';
 import { Coaching } from '../domain/coaching.entity';
 import { TrainingBlock } from '../domain/training-block.entity';
+import { CardioSession } from '../domain/cardio-session.entity';
 import { UsersService } from '../users/users.service';
 import { verifyPassword } from '../common/password';
-import { removeVideoFile } from '../common/uploads';
+import { removeAttachmentFile, removeVideoFile } from '../common/uploads';
+import { Message } from '../domain/message.entity';
 import { ownExercisesUsedByOthers } from '../exercises/exercise-usage';
 
 /** A person's own account: password, a copy of their data, and deleting it all. */
@@ -35,7 +37,7 @@ export class AccountService {
   async export(userId: string) {
     const user = await this.users.findById(userId);
     const where = { user: { id: userId } };
-    const [sessions, programs, bodyWeight, exercises, friendships, coachings, blocks] =
+    const [sessions, programs, bodyWeight, exercises, friendships, coachings, blocks, cardio] =
       await Promise.all([
         this.db.getRepository(WorkoutSession).find({ where, order: { date: 'ASC' } }),
         this.db.getRepository(Program).find({ where: { owner: { id: userId } } }),
@@ -48,12 +50,22 @@ export class AccountService {
           where: [{ coach: { id: userId } }, { client: { id: userId } }],
         }),
         this.db.getRepository(TrainingBlock).find({ where }),
+        this.db.getRepository(CardioSession).find({ where, order: { date: 'ASC' } }),
       ]);
     const other = (a: User, b: User) => (a.id === userId ? b : a).name;
     return {
       exportedAt: new Date().toISOString(),
       account: { name: user.name, email: user.email, createdAt: user.createdAt, acceptedTermsAt: user.acceptedTermsAt },
       bodyWeight: bodyWeight.map(({ date, weight }) => ({ date, weightKg: weight })),
+      cardio: cardio.map(({ date, activity, durationSeconds, distanceKm, avgHeartRate, calories, notes }) => ({
+        date,
+        activity,
+        durationSeconds,
+        distanceKm,
+        avgHeartRate,
+        calories,
+        notes,
+      })),
       workouts: sessions.map((s) => ({
         date: s.date,
         status: s.status,
@@ -69,6 +81,7 @@ export class AccountService {
           drops: set.drops?.map(({ weight, reps }) => ({ weightKg: weight, reps })),
           supersetWith: set.supersetPartners?.map((p) => ({ exercise: p.exercise.name, weightKg: p.weight, reps: p.reps })),
           hasVideo: !!set.videoFile,
+          videoComment: set.videoNote ?? undefined,
         })),
       })),
       programs: programs.map((p) => ({
@@ -120,6 +133,14 @@ export class AccountService {
       .getRepository(WorkoutSession)
       .find({ where: { user: { id: userId } } })
       .then((ss) => ss.flatMap((s) => s.sets.map((set) => set.videoFile)));
+    // Files in their chats, sent or received — the messages go with the account.
+    const chatFiles = await this.db
+      .getRepository(Message)
+      .createQueryBuilder('m')
+      .select('m.attachmentFile', 'file')
+      .where('m.attachmentFile IS NOT NULL')
+      .andWhere('(m.senderId = :me OR m.recipientId = :me)', { me: userId })
+      .getRawMany<{ file: string }>();
 
     await this.db.transaction(async (tx) => {
       const usedByOthers = await ownExercisesUsedByOthers(tx, userId);
@@ -137,6 +158,7 @@ export class AccountService {
     });
 
     await Promise.all(videos.map(removeVideoFile));
+    await Promise.all(chatFiles.map((f) => removeAttachmentFile(f.file)));
   }
 
   private async checkPassword(userId: string, password: string): Promise<User> {

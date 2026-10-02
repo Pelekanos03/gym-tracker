@@ -30,6 +30,19 @@ export class ExercisesController {
     return this.exercises.deletePreview(id, me.id);
   }
 
+  /** Hide a built-in exercise from your own library. */
+  @Post(':id/hide')
+  async hide(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    await this.exercises.hide(id, me.id);
+    return { ok: true };
+  }
+
+  @Delete(':id/hide')
+  async unhide(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    await this.exercises.unhide(id, me.id);
+    return { ok: true };
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string, @CurrentUser() me: SessionUser) {
     await this.exercises.deleteOwn(id, me.id);

@@ -173,8 +173,17 @@ export class WorkoutsService {
 
   async removeVideo(setId: string, userId: string): Promise<void> {
     const set = await this.findOwnedSet(setId, userId);
-    await this.setLogs.update(set.id, { videoFile: null });
+    await this.setLogs.update(set.id, { videoFile: null, videoNote: null });
     await removeVideoFile(set.videoFile);
+  }
+
+  /** The lifter adds, changes or clears the comment on their set's video. */
+  async setVideoNote(setId: string, userId: string, note: string): Promise<SetLog> {
+    const set = await this.findOwnedSet(setId, userId);
+    if (!set.videoFile) throw new BadRequestException('Add a video to this set first');
+    set.videoNote = note.trim() || null;
+    await this.setLogs.update(set.id, { videoNote: set.videoNote });
+    return set;
   }
 
   private async findOwnedSet(setId: string, userId: string): Promise<SetLog> {
@@ -209,8 +218,9 @@ export class WorkoutsService {
         ]),
       ),
     ]);
-    return setInputs.map((setInput) => {
+    return setInputs.map((setInput, i) => {
       const set = new SetLog();
+      set.orderIndex = i + 1;
       set.exercise = byId.get(setInput.exerciseId)!;
       set.setNumber = setInput.setNumber;
       set.weight = setInput.weight;
@@ -219,6 +229,8 @@ export class WorkoutsService {
       set.setType = setInput.setType ?? SetType.WORKING;
       set.videoFile =
         setInput.videoFile && keepableVideos.has(setInput.videoFile) ? setInput.videoFile : null;
+      // The comment belongs to the video: no video, no comment.
+      set.videoNote = set.videoFile ? setInput.videoNote?.trim() || null : null;
       set.drops =
         set.setType === SetType.DROP_SET
           ? (setInput.drops ?? []).map((dropInput, i) => {

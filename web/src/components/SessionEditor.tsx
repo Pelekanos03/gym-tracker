@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import type { SetType, WorkoutSession } from '../types';
@@ -13,11 +13,18 @@ import {
   type DropEntry,
   type PartnerEntry,
 } from './SetExtras';
+import { arrayMove } from '@dnd-kit/sortable';
+import { newKey } from '../keys';
+import { SortableItem, SortableList } from './Sortable';
+import { SwipeToDelete } from './SwipeToDelete';
 import { ExercisePicker } from './ExercisePicker';
+import { decimalInput } from '../decimal';
 
 const SET_TYPES: SetType[] = ['WORKING', 'WARMUP', 'DROP_SET', 'SUPERSET', 'BACKOFF', 'AMRAP'];
 
 interface SetRow {
+  /** Stable key for drag-and-drop. */
+  id: string;
   exerciseId: string;
   weight: string;
   reps: string;
@@ -27,10 +34,13 @@ interface SetRow {
   supersetPartners: PartnerEntry[];
   /** An already-uploaded video; sent back so saving the edit keeps it. */
   videoFile?: string | null;
+  /** Its comment — sent back too, or editing the session would wipe it. */
+  videoNote?: string | null;
 }
 
 function rowsFromSession(session: WorkoutSession): SetRow[] {
   return session.sets.map((s) => ({
+    id: newKey(),
     exerciseId: s.exercise.id,
     weight: String(s.weight),
     reps: String(s.reps),
@@ -43,6 +53,7 @@ function rowsFromSession(session: WorkoutSession): SetRow[] {
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((p) => ({ exerciseId: p.exercise.id, weight: String(p.weight), reps: String(p.reps) })),
     videoFile: s.videoFile,
+    videoNote: s.videoNote,
   }));
 }
 
@@ -64,6 +75,18 @@ export function SessionEditor({
   const [rows, setRows] = useState<SetRow[]>(rowsFromSession(session));
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+
+  function move(from: string, to: string) {
+    setRows((rs) => {
+      const i = rs.findIndex((x) => x.id === from);
+      const j = rs.findIndex((x) => x.id === to);
+      return i < 0 || j < 0 ? rs : arrayMove(rs, i, j);
+    });
+  }
+
+  function remove(i: number) {
+    setRows((rs) => (rs.length === 1 ? rs : rs.filter((_, idx) => idx !== i)));
+  }
 
   function update(i: number, patch: Partial<SetRow>) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -111,6 +134,7 @@ export function SessionEditor({
             supersetPartners:
               r.setType === 'SUPERSET' ? partnersPayload(r.supersetPartners) : undefined,
             videoFile: r.videoFile ?? undefined,
+            videoNote: r.videoNote ?? undefined,
           };
         }),
       });
@@ -128,7 +152,12 @@ export function SessionEditor({
       className="panel"
       style={{ background: 'var(--panel-2)', marginTop: '.6rem' }}
     >
-      <h3>Edit session</h3>
+      <div className="panel-head editor-head">
+        <h3>Edit session</h3>
+        <button type="button" className="ghost small" onClick={onCancel}>
+          ✕ Close
+        </button>
+      </div>
       {error && <div className="err">{error}</div>}
       <div className="row">
         <div>
@@ -141,116 +170,116 @@ export function SessionEditor({
         </div>
       </div>
 
-      <div className="table-scroll" style={{ marginTop: '.5rem' }}>
-      <table>
-        <thead>
-          <tr>
-            <th>Exercise</th>
-            <th>Weight (kg)</th>
-            <th>Reps</th>
-            <th>RPE</th>
-            <th>Set type</th>
-            <th
-              style={{ position: 'sticky', right: 0, background: 'var(--panel-2)' }}
-            />
-          </tr>
-        </thead>
-        <tbody>
+      {/* Same as logging: drag the ⋮⋮ grip to reorder; on a phone swipe a set to delete it. */}
+      <div className="edit-grid">
+        <div className="edit-grid-head">
+          <span />
+          <span>Exercise</span>
+          <span>Weight (kg)</span>
+          <span>Reps</span>
+          <span>RPE</span>
+          <span>Set type</span>
+          <span />
+        </div>
+        <SortableList ids={rows.map((x) => x.id)} onMove={move}>
           {rows.map((r, i) => (
-            <Fragment key={i}>
-            <tr>
-              <td>
-                <ExercisePicker
-                  exercises={exercises.data ?? []}
-                  value={r.exerciseId}
-                  onChange={(id) => update(i, { exerciseId: id })}
-                  style={{ minWidth: 150 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  value={r.weight}
-                  onChange={(e) => update(i, { weight: e.target.value })}
-                  style={{ width: 80 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  value={r.reps}
-                  onChange={(e) => update(i, { reps: e.target.value })}
-                  style={{ width: 64 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  step={0.5}
-                  value={r.rpe}
-                  onChange={(e) => update(i, { rpe: e.target.value })}
-                  style={{ width: 64 }}
-                />
-              </td>
-              <td>
-                <select
-                  value={r.setType}
-                  onChange={(e) => changeSetType(i, e.target.value as SetType)}
-                  style={{ minWidth: 110 }}
-                >
-                  {SET_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {SET_TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td style={{ position: 'sticky', right: 0, background: 'var(--panel-2)' }}>
-                <button
-                  type="button"
-                  className="ghost small"
-                  title="Remove this set"
-                  onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))}
-                  disabled={rows.length === 1}
-                >
-                  ✕
-                </button>
-              </td>
-            </tr>
-            {(r.setType === 'DROP_SET' || r.setType === 'SUPERSET') && (
-              <tr>
-                <td colSpan={6}>
-                  {r.setType === 'DROP_SET' ? (
-                    <DropRows drops={r.drops} onChange={(drops) => update(i, { drops })} />
-                  ) : (
-                    <SupersetRows
-                      partners={r.supersetPartners}
-                      exercises={exercises.data ?? []}
-                      onChange={(supersetPartners) => update(i, { supersetPartners })}
-                    />
+            <SortableItem key={r.id} id={r.id}>
+              {(handle) => (
+                <>
+                  <SwipeToDelete onDelete={() => remove(i)}>
+                    <div className="edit-row">
+                      {handle}
+                      <div className="edit-exercise">
+                        <ExercisePicker
+                          exercises={exercises.data ?? []}
+                          value={r.exerciseId}
+                          onChange={(id) => update(i, { exerciseId: id })}
+                        />
+                      </div>
+                      <div className="edit-field">
+                        <label className="line-label">kg</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          min={0}
+                          step={0.5}
+                          value={r.weight}
+                          onChange={(e) => update(i, { weight: decimalInput(e.target.value) })}
+                        />
+                      </div>
+                      <div className="edit-field">
+                        <label className="line-label">reps</label>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={r.reps}
+                          onChange={(e) => update(i, { reps: e.target.value })}
+                        />
+                      </div>
+                      <div className="edit-field">
+                        <label className="line-label">RPE</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          min={1}
+                          max={10}
+                          step={0.5}
+                          value={r.rpe}
+                          onChange={(e) => update(i, { rpe: decimalInput(e.target.value) })}
+                        />
+                      </div>
+                      <select
+                        className="edit-type"
+                        value={r.setType}
+                        onChange={(e) => changeSetType(i, e.target.value as SetType)}
+                        aria-label="Set type"
+                      >
+                        {SET_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {SET_TYPE_LABELS[t]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="ghost small desktop-only"
+                        title="Remove this set"
+                        onClick={() => remove(i)}
+                        disabled={rows.length === 1}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </SwipeToDelete>
+                  {(r.setType === 'DROP_SET' || r.setType === 'SUPERSET') && (
+                    <div className="set-extras">
+                      {r.setType === 'DROP_SET' ? (
+                        <DropRows drops={r.drops} onChange={(drops) => update(i, { drops })} />
+                      ) : (
+                        <SupersetRows
+                          partners={r.supersetPartners}
+                          exercises={exercises.data ?? []}
+                          onChange={(supersetPartners) => update(i, { supersetPartners })}
+                        />
+                      )}
+                    </div>
                   )}
-                </td>
-              </tr>
-            )}
-            </Fragment>
+                </>
+              )}
+            </SortableItem>
           ))}
-        </tbody>
-      </table>
+        </SortableList>
       </div>
 
-      <div className="row" style={{ marginTop: '.75rem' }}>
+      <div className="row stack-on-phone" style={{ marginTop: '.75rem' }}>
         <button
           type="button"
           className="ghost"
           onClick={() =>
             setRows((rs) => [
               ...rs,
-              { exerciseId: '', weight: '', reps: '', rpe: '', setType: 'WORKING', drops: [], supersetPartners: [] },
+              { id: newKey(), exerciseId: '', weight: '', reps: '', rpe: '', setType: 'WORKING', drops: [], supersetPartners: [] },
             ])
           }
         >
