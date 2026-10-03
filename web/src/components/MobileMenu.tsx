@@ -3,6 +3,7 @@ import type { User } from '../types';
 import { TABS, type Badges, type Tab } from '../sections';
 import { versionLabel } from '../version';
 import { Logo } from './Logo';
+import { Avatar } from './Avatar';
 
 export type View = Tab | 'account';
 
@@ -86,9 +87,12 @@ export function MobileMenu({
             className={`menu-item${view === 'account' ? ' active' : ''}`}
             onClick={() => pick('account')}
           >
-            <span>
-              {me.name}
-              <span className="muted menu-sub">Account</span>
+            <span className="menu-account">
+              <Avatar user={me} size={36} />
+              <span>
+                {me.name}
+                <span className="muted menu-sub">Account</span>
+              </span>
             </span>
           </button>
           <button type="button" className="menu-item" onClick={onLogOut}>

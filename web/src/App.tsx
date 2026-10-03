@@ -7,6 +7,8 @@ import { MobileMenu, type View } from './components/MobileMenu';
 import { Logo } from './components/Logo';
 import { LoginPage } from './components/LoginPage';
 import { AccountPanel } from './components/AccountPanel';
+import { Avatar } from './components/Avatar';
+import { HealthConsentBanner } from './components/PrivacyChoices';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { LegalPage } from './components/LegalPage';
 import { ReportPage } from './components/ReportPage';
@@ -108,6 +110,12 @@ export default function App() {
   return (
     <div className="app">
       <UpdateBanner />
+      {me && route === 'app' && me.consents && !me.consents.health && (
+        <HealthConsentBanner
+          onChanged={(user) => setMe((prev) => (prev ? { ...prev, ...user } : user))}
+          onOpenAccount={() => show('account')}
+        />
+      )}
       <div className="topbar">
         {me && route === 'app' && (
           <button
@@ -136,15 +144,19 @@ export default function App() {
         </a>
         {me && route === 'app' && <span className="topbar-section phone-only">{sectionLabel}</span>}
         {me && route === 'app' && (
-          <div className="row desktop-only" style={{ alignItems: 'center', gap: '.5rem', flex: '0 0 auto' }}>
+          <div className="topbar-actions">
+            {/* Your picture (or a blank face): opens Account; tap again to go back to training. */}
             <button
-              className={`ghost small${showAccount ? ' active-ghost' : ''}`}
+              type="button"
+              className={`avatar-button${showAccount ? ' active' : ''}`}
               onClick={() => show(showAccount ? lastTab : 'account')}
-              title={`Signed in as ${me.name}`}
+              title={showAccount ? 'Back to training' : `Account — signed in as ${me.name}`}
+              aria-label={showAccount ? 'Back to training' : 'Account'}
+              aria-pressed={showAccount}
             >
-              {showAccount ? 'Back to training' : me.name}
+              <Avatar user={me} size={34} />
             </button>
-            <button className="ghost small" onClick={logOut}>
+            <button className="ghost small desktop-only" onClick={logOut}>
               Log out
             </button>
           </div>
@@ -182,6 +194,7 @@ export default function App() {
           {me && showAccount && (
             <AccountPanel
               me={me}
+              onChanged={(user) => setMe((prev) => (prev ? { ...prev, ...user } : user))}
               onDeleted={() => {
                 setView('log');
                 setMe(null);

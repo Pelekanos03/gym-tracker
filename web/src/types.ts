@@ -27,6 +27,10 @@ export interface User {
   isAdmin?: boolean;
   /** Your own setting (only on your own user): in-app reminder to log body weight. */
   weightReminder?: WeightReminder;
+  /** Your profile picture's version (null = none, show the blank face). */
+  avatarVersion?: string | null;
+  /** Your privacy choices (only on your own user). */
+  consents?: { health: boolean; partners: boolean; ai: boolean };
 }
 
 export interface FeedbackItem {

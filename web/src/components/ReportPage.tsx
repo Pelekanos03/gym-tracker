@@ -11,6 +11,7 @@ import {
   kg2,
   sessionVolume,
   topSetLabel,
+  todayString,
 } from '../stats';
 import { Logo } from './Logo';
 
@@ -55,7 +56,7 @@ export function ReportPage({ me }: { me: User }) {
         <div>
           <h1>Training report — {me.name}</h1>
           <p className="muted">
-            {first && last ? `${formatDay(first)} – ${formatDay(last)}` : 'No workouts yet'} · made {formatDay(new Date().toISOString().slice(0, 10))}
+            {first && last ? `${formatDay(first)} – ${formatDay(last)}` : 'No workouts yet'} · made {formatDay(todayString())}
           </p>
         </div>
       </header>

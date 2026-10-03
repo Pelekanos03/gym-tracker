@@ -19,6 +19,7 @@ import { HiddenExercise } from '../domain/hidden-exercise.entity';
 import { WorkoutDraft } from '../domain/workout-draft.entity';
 import { CardioSession } from '../domain/cardio-session.entity';
 import { Message } from '../domain/message.entity';
+import { ConsentEvent } from '../domain/consent-event.entity';
 import { isPostgres } from './column-types';
 
 const entities = [
@@ -42,6 +43,7 @@ const entities = [
   WorkoutDraft,
   CardioSession,
   Message,
+  ConsentEvent,
 ];
 
 /**

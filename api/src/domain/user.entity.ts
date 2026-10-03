@@ -65,6 +65,30 @@ export class User {
    * built-in ones. Personal: only served to them, and never sent with the
    * user object that friends and coaches see.
    */
+  /**
+   * Explicit consent to store the health data they log (body weight,
+   * training, videos) to run the app — GDPR art. 9(2)(a). Given at sign-up;
+   * older accounts are asked once in the app. Null = not given yet.
+   */
+  @Exclude()
+  @Column({ name: 'health_consent_at', type: DATETIME, nullable: true })
+  healthConsentAt: Date | null;
+
+  /** Optional, off by default: their data may be shared with partners (named in the privacy policy). */
+  @Exclude()
+  @Column({ name: 'consent_partners', default: false })
+  consentPartners: boolean;
+
+  /** Optional, off by default: their data may be used to train AI models. */
+  @Exclude()
+  @Column({ name: 'consent_ai', default: false })
+  consentAi: boolean;
+
+  /** Their profile picture (file name under AVATAR_DIR), or none: the app shows a blank face. */
+  @Exclude()
+  @Column({ name: 'avatar_file', type: 'varchar', nullable: true })
+  avatarFile: string | null;
+
   @Exclude()
   @Column({ name: 'cardio_activities', type: 'simple-json', default: '[]' })
   cardioActivities: string[];

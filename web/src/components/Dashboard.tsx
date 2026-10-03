@@ -581,7 +581,7 @@ function LogWorkoutForm({
   const exercises = useAsync(() => api.listExercises(userId), [userId]);
   const myPrograms = useAsync(() => api.listPrograms(userId), [userId]);
   const sharedPrograms = useAsync(() => api.sharedPrograms(userId), [userId]);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayString);
   const [notes, setNotes] = useState('');
   const [groups, setGroups] = useState<ExerciseGroup[]>([emptyGroup()]);
   const [programDayId, setProgramDayId] = useState<string>();

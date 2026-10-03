@@ -6,6 +6,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../domain/user.entity';
+import { ConsentEvent, ConsentPurpose } from '../domain/consent-event.entity';
+import { POLICY_VERSION } from '../common/policy';
 import { hashPassword } from '../common/password';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -19,6 +21,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(ConsentEvent)
+    private readonly consentEvents: Repository<ConsentEvent>,
   ) {}
 
   async create(dto: CreateUserDto): Promise<User> {
@@ -34,7 +38,48 @@ export class UsersService {
       passwordHash: hashPassword(dto.password),
       acceptedTermsAt: new Date(),
     });
-    return this.users.save(user);
+    const saved = await this.users.save(user);
+    await this.setConsents(saved, {
+      health: true,
+      partners: dto.consentPartners === true,
+      ai: dto.consentAi === true,
+    });
+    return saved;
+  }
+
+  /**
+   * Records consent choices: the current state on the user, and every
+   * change in the history (with the policy version) so it can be proven.
+   * Unchanged choices aren't logged again. Health consent can only be
+   * given here — withdrawing it means deleting the data (or the account).
+   */
+  async setConsents(user: User, choices: Partial<Record<ConsentPurpose, boolean>>): Promise<User> {
+    const current: Record<ConsentPurpose, boolean> = {
+      health: !!user.healthConsentAt,
+      partners: user.consentPartners,
+      ai: user.consentAi,
+    };
+    const changed = (Object.keys(choices) as ConsentPurpose[]).filter(
+      (p) => choices[p] !== undefined && choices[p] !== current[p] && !(p === 'health' && !choices[p]),
+    );
+    if (changed.length === 0) return user;
+    for (const p of changed) {
+      if (p === 'health') user.healthConsentAt = new Date();
+      if (p === 'partners') user.consentPartners = choices.partners!;
+      if (p === 'ai') user.consentAi = choices.ai!;
+    }
+    const saved = await this.users.save(user);
+    await this.consentEvents.save(
+      changed.map((purpose) =>
+        this.consentEvents.create({ user: { id: user.id }, purpose, granted: choices[purpose]!, policyVersion: POLICY_VERSION }),
+      ),
+    );
+    return saved;
+  }
+
+  /** Someone's consent history, oldest first (for their data export). */
+  consentHistory(userId: string): Promise<ConsentEvent[]> {
+    return this.consentEvents.find({ where: { user: { id: userId } }, order: { createdAt: 'ASC' } });
   }
 
   /** Sets a new password and logs out every existing session. */
@@ -44,7 +89,7 @@ export class UsersService {
     return this.users.save(user);
   }
 
-  async update(id: string, patch: Partial<Pick<User, 'weightReminder'>>): Promise<User> {
+  async update(id: string, patch: Partial<Pick<User, 'weightReminder' | 'avatarFile'>>): Promise<User> {
     const user = await this.findById(id);
     Object.assign(user, patch);
     return this.users.save(user);

@@ -1,24 +1,110 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '../api';
 import type { User } from '../types';
 import { FeedbackInbox } from './Feedback';
 import { bodyWeightCsv, cardioCsv, download, workoutsCsv } from '../exportData';
+import { Avatar } from './Avatar';
+import { squareAvatar } from '../avatarImage';
+import { PrivacyChoices } from './PrivacyChoices';
 
-/** Your account: change password, download your data, delete everything. */
-export function AccountPanel({ me, onDeleted }: { me: User; onDeleted: () => void }) {
+/** Your account: profile picture, change password, download your data, delete everything. */
+export function AccountPanel({
+  me,
+  onChanged,
+  onDeleted,
+}: {
+  me: User;
+  /** You, updated (e.g. a new profile picture). */
+  onChanged: (user: User) => void;
+  onDeleted: () => void;
+}) {
   return (
     <>
-      <div className="panel">
-        <h2>Account</h2>
-        <p className="muted" style={{ margin: 0 }}>
-          {me.name} · {me.email}
-        </p>
-      </div>
+      <ProfilePicture me={me} onChanged={onChanged} />
+      <PrivacyChoices me={me} onChanged={onChanged} />
       {me.isAdmin && <FeedbackInbox />}
       <ChangePassword />
       <DownloadData me={me} />
       <DeleteAccount onDeleted={onDeleted} />
     </>
+  );
+}
+
+/** Your name and email, with your picture — add one, change it, or go back to the blank face. */
+function ProfilePicture({ me, onChanged }: { me: User; onChanged: (user: User) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function pick(file: File) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      onChanged(await api.uploadAvatar(await squareAvatar(file)));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      onChanged(await api.removeAvatar());
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <h2>Account</h2>
+      {error && <div className="err">{error}</div>}
+      <div className="profile">
+        <button
+          type="button"
+          className="profile-picture"
+          onClick={() => input.current?.click()}
+          disabled={busy}
+          aria-label={me.avatarVersion ? 'Change profile picture' : 'Add a profile picture'}
+        >
+          <Avatar user={me} size={88} />
+          <span className="profile-picture-edit" aria-hidden>
+            {busy ? '…' : '📷'}
+          </span>
+        </button>
+        <div className="profile-main">
+          <strong>{me.name}</strong>
+          <span className="muted">{me.email}</span>
+          <div className="profile-actions">
+            <button type="button" className="ghost small" onClick={() => input.current?.click()} disabled={busy}>
+              {me.avatarVersion ? 'Change photo' : 'Add photo'}
+            </button>
+            {me.avatarVersion && (
+              <button type="button" className="ghost small" onClick={remove} disabled={busy}>
+                Remove photo
+              </button>
+            )}
+          </div>
+          <span className="muted profile-hint">Your friends and your coach can see it.</span>
+        </div>
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void pick(file);
+        }}
+      />
+    </div>
   );
 }
 

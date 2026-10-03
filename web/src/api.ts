@@ -49,6 +49,11 @@ export function videoUrl(setId: string): string {
   return `${BASE}/set-logs/${setId}/video`;
 }
 
+/** Someone's profile picture; `version` changes with each new picture so it isn't cached stale. */
+export function avatarUrl(userId: string, version: string): string {
+  return `${BASE}/avatars/${userId}?v=${encodeURIComponent(version)}`;
+}
+
 /** A file sent in chat; only the two people in that chat can open it. */
 export function attachmentUrl(messageId: string): string {
   return `${BASE}/messages/${messageId}/attachment`;
@@ -103,6 +108,9 @@ export const api = {
     email: string;
     password: string;
     acceptTerms: boolean;
+    healthConsent: boolean;
+    consentPartners: boolean;
+    consentAi: boolean;
     inviteCode?: string;
   }) =>
     request<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
@@ -193,6 +201,19 @@ export const api = {
 
   sendMessage: (toUserId: string, body: string) =>
     request<ChatMessage>('/messages', { method: 'POST', body: JSON.stringify({ toUserId, body }) }),
+
+  /** Your profile picture (already shrunk to a small JPEG). Returns you, updated. */
+  uploadAvatar: (picture: Blob) => {
+    const form = new FormData();
+    form.append('avatar', picture, 'avatar.jpg');
+    return uploadForm<User>('/account/avatar', form, undefined, 'That picture is too big.');
+  },
+
+  removeAvatar: () => request<User>('/account/avatar', { method: 'DELETE' }),
+
+  /** Change your privacy choices; only the ones given change. Returns you, updated. */
+  setConsents: (choices: { health?: true; partners?: boolean; ai?: boolean }) =>
+    request<User>('/account/consents', { method: 'POST', body: JSON.stringify(choices) }),
 
   /** A file (photo, PDF, document…) with optional text. */
   sendAttachment: (toUserId: string, file: File, body: string, onProgress?: (fraction: number) => void) => {

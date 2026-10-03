@@ -101,3 +101,27 @@ export async function removeAttachmentFile(file: string | null | undefined): Pro
   if (!file) return;
   await unlink(join(CHAT_DIR, basename(file))).catch(() => undefined);
 }
+
+/** Profile pictures. Streamed by GET /api/avatars/:userId to people allowed to see them. */
+export const AVATAR_DIR = resolve(process.env.UPLOADS_DIR ?? 'uploads', 'avatars');
+
+/** The app shrinks photos to a small square first; this only stops misuse. */
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+mkdirSync(AVATAR_DIR, { recursive: true });
+
+/** Accepted picture types → the extension stored (and so the type served). */
+export const AVATAR_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+export function avatarPath(file: string): string {
+  return join(AVATAR_DIR, basename(file));
+}
+
+export async function removeAvatarFile(file: string | null | undefined): Promise<void> {
+  if (!file) return;
+  await unlink(join(AVATAR_DIR, basename(file))).catch(() => undefined);
+}

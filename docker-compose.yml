@@ -2,6 +2,14 @@
 #                      docker compose up -d --build
 # Then open:           http://localhost:8080
 # Demo data (optional, once): docker compose exec api node dist/database/seed.js
+# Logs (which include IP addresses) are kept short: at most 3 × 10 MB per
+# container, oldest overwritten first — as the privacy policy says.
+x-logging: &short-logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:17-alpine
@@ -43,11 +51,12 @@ services:
       # Proxies in front of the api: 1 = nginx; 2 = Cloudflare tunnel + nginx.
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
     volumes:
-      - uploads:/data            # uploaded set videos
+      - uploads:/data            # uploaded videos, chat files, profile pictures
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    logging: *short-logs
 
   web:
     build:
@@ -59,6 +68,7 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    logging: *short-logs
 
   # Optional: share this machine's app on a public https://….trycloudflare.com
   # link, no server or account needed. Start with:

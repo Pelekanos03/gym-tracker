@@ -1,5 +1,6 @@
 import type { BodyWeightEntry, CardioSession, WorkoutSession } from './types';
 import { SET_TYPE_LABELS, cardioLabel } from './types';
+import { todayString } from './stats';
 
 /**
  * CSV files that open cleanly in Excel / Google Sheets / Numbers: UTF-8
@@ -25,7 +26,7 @@ export function download(filename: string, content: string, type = 'text/csv;cha
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const stamp = () => new Date().toISOString().slice(0, 10);
+const stamp = () => todayString();
 
 /** One row per set — plus one per drop and per superset partner, marked in "Part". */
 export function workoutsCsv(sessions: WorkoutSession[]): [string, string] {

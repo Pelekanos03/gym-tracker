@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { User } from '../types';
+import { CONSENT_TEXT } from './PrivacyChoices';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -154,6 +155,10 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
 function SignupForm({ onLoggedIn }: { onLoggedIn: (user: User) => void }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', inviteCode: '' });
   const [acceptTerms, setAcceptTerms] = useState(false);
+  // Separate boxes, never pre-ticked: each consent has to be its own free choice (GDPR art. 7).
+  const [healthConsent, setHealthConsent] = useState(false);
+  const [consentPartners, setConsentPartners] = useState(false);
+  const [consentAi, setConsentAi] = useState(false);
   const [inviteRequired, setInviteRequired] = useState(false);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -175,6 +180,9 @@ function SignupForm({ onLoggedIn }: { onLoggedIn: (user: User) => void }) {
         email: form.email,
         password: form.password,
         acceptTerms,
+        healthConsent,
+        consentPartners,
+        consentAi,
         inviteCode: inviteRequired ? form.inviteCode : undefined,
       });
       onLoggedIn(user);
@@ -249,7 +257,27 @@ function SignupForm({ onLoggedIn }: { onLoggedIn: (user: User) => void }) {
           .
         </span>
       </label>
-      <button disabled={busy || !acceptTerms} style={{ width: '100%' }}>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={healthConsent}
+          onChange={(e) => setHealthConsent(e.target.checked)}
+          required
+        />
+        <span>{CONSENT_TEXT.health}</span>
+      </label>
+      <fieldset className="optional-consents">
+        <legend>Optional — the app works the same without these, and you can change them any time</legend>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={consentPartners} onChange={(e) => setConsentPartners(e.target.checked)} />
+          <span>{CONSENT_TEXT.partners}</span>
+        </label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={consentAi} onChange={(e) => setConsentAi(e.target.checked)} />
+          <span>{CONSENT_TEXT.ai}</span>
+        </label>
+      </fieldset>
+      <button disabled={busy || !acceptTerms || !healthConsent} style={{ width: '100%' }}>
         {busy ? 'Creating…' : 'Create account'}
       </button>
     </form>

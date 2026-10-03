@@ -12,7 +12,7 @@ import { TrainingBlock } from '../domain/training-block.entity';
 import { CardioSession } from '../domain/cardio-session.entity';
 import { UsersService } from '../users/users.service';
 import { verifyPassword } from '../common/password';
-import { removeAttachmentFile, removeVideoFile } from '../common/uploads';
+import { removeAttachmentFile, removeAvatarFile, removeVideoFile } from '../common/uploads';
 import { Message } from '../domain/message.entity';
 import { ownExercisesUsedByOthers } from '../exercises/exercise-usage';
 
@@ -55,7 +55,25 @@ export class AccountService {
     const other = (a: User, b: User) => (a.id === userId ? b : a).name;
     return {
       exportedAt: new Date().toISOString(),
-      account: { name: user.name, email: user.email, createdAt: user.createdAt, acceptedTermsAt: user.acceptedTermsAt },
+      account: {
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+        acceptedTermsAt: user.acceptedTermsAt,
+        hasProfilePicture: !!user.avatarFile,
+        ownCardioActivities: user.cardioActivities ?? [],
+      },
+      privacyChoices: {
+        healthDataConsentAt: user.healthConsentAt,
+        shareWithPartners: user.consentPartners,
+        aiTraining: user.consentAi,
+        history: (await this.users.consentHistory(userId)).map((e) => ({
+          purpose: e.purpose,
+          granted: e.granted,
+          policyVersion: e.policyVersion,
+          at: e.createdAt,
+        })),
+      },
       bodyWeight: bodyWeight.map(({ date, weight }) => ({ date, weightKg: weight })),
       cardio: cardio.map(({ date, activity, durationSeconds, distanceKm, avgHeartRate, calories, notes }) => ({
         date,
@@ -159,6 +177,7 @@ export class AccountService {
 
     await Promise.all(videos.map(removeVideoFile));
     await Promise.all(chatFiles.map((f) => removeAttachmentFile(f.file)));
+    await removeAvatarFile(user.avatarFile);
   }
 
   private async checkPassword(userId: string, password: string): Promise<User> {
