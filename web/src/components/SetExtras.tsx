@@ -1,4 +1,6 @@
 import type { Exercise } from '../types';
+import { ExercisePicker } from './ExercisePicker';
+import { decimalInput } from '../decimal';
 
 /**
  * The sub-rows shown under a set in the log/edit forms: the drops of a drop
@@ -53,11 +55,10 @@ function WeightRepsInputs({
   return (
     <>
       <input
-        type="number"
-        min={0}
-        step={0.5}
+        type="text"
+        inputMode="decimal"
         value={weight}
-        onChange={(e) => onChange({ weight: e.target.value })}
+        onChange={(e) => onChange({ weight: decimalInput(e.target.value) })}
         placeholder="kg"
         style={{ ...fixed, width: 80 }}
       />
@@ -66,6 +67,7 @@ function WeightRepsInputs({
       </span>
       <input
         type="number"
+        inputMode="numeric"
         min={0}
         value={reps}
         onChange={(e) => onChange({ reps: e.target.value })}
@@ -86,7 +88,7 @@ function SubRows({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem', paddingLeft: '1.5rem' }}>
+    <div className="sub-rows">
       {children}
       <div>
         <button type="button" className="ghost small" onClick={onAdd}>
@@ -116,7 +118,7 @@ export function DropRows({
   return (
     <SubRows addLabel="+ Add drop" onAdd={() => onChange([...drops, emptyDrop()])}>
       {drops.map((d, i) => (
-        <div key={i} className="row" style={{ alignItems: 'center', gap: '.4rem' }}>
+        <div key={i} className="row sub-row drop-row" style={{ alignItems: 'center', gap: '.4rem' }}>
           <span className="muted" style={{ ...fixed, whiteSpace: 'nowrap' }}>
             ↳ Drop {i + 1}
           </span>
@@ -148,24 +150,18 @@ export function SupersetRows({
   return (
     <SubRows addLabel="+ Add exercise to superset" onAdd={() => onChange([...partners, emptyPartner()])}>
       {partners.map((p, i) => (
-        <div key={i} className="row" style={{ alignItems: 'center', gap: '.4rem' }}>
+        <div key={i} className="row sub-row partner-row" style={{ alignItems: 'center', gap: '.4rem' }}>
           <span className="muted" style={fixed}>
             ↳ +
           </span>
-          <select
+          <ExercisePicker
+            exercises={exercises}
             value={p.exerciseId}
-            onChange={(e) =>
-              onChange(partners.map((x, j) => (j === i ? { ...x, exerciseId: e.target.value } : x)))
+            onChange={(id) =>
+              onChange(partners.map((x, j) => (j === i ? { ...x, exerciseId: id } : x)))
             }
             style={{ ...fixed, maxWidth: 200 }}
-          >
-            <option value="">— pick exercise —</option>
-            {exercises.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name}
-              </option>
-            ))}
-          </select>
+          />
           <WeightRepsInputs
             weight={p.weight}
             reps={p.reps}

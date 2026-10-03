@@ -12,30 +12,62 @@ import { SetLog } from '../domain/set-log.entity';
 import { SetDrop } from '../domain/set-drop.entity';
 import { SupersetPartner } from '../domain/superset-partner.entity';
 import { TrainingBlock } from '../domain/training-block.entity';
+import { BodyWeightEntry } from '../domain/body-weight-entry.entity';
+import { PasswordResetToken } from '../domain/password-reset-token.entity';
+import { Feedback } from '../domain/feedback.entity';
+import { HiddenExercise } from '../domain/hidden-exercise.entity';
+import { WorkoutDraft } from '../domain/workout-draft.entity';
+import { CardioSession } from '../domain/cardio-session.entity';
+import { Message } from '../domain/message.entity';
+import { ConsentEvent } from '../domain/consent-event.entity';
+import { isPostgres } from './column-types';
+
+const entities = [
+  User,
+  Friendship,
+  Coaching,
+  Exercise,
+  Program,
+  ProgramDay,
+  ProgramExercise,
+  ProgramShare,
+  WorkoutSession,
+  SetLog,
+  SetDrop,
+  SupersetPartner,
+  TrainingBlock,
+  BodyWeightEntry,
+  PasswordResetToken,
+  Feedback,
+  HiddenExercise,
+  WorkoutDraft,
+  CardioSession,
+  Message,
+  ConsentEvent,
+];
 
 /**
- * Single source of truth for the DB connection, shared by the Nest app and
- * the standalone seed script. SQLite keeps setup to zero for development;
- * swap the driver here when you move to Postgres.
+ * Single source of truth for the DB connection, shared by the Nest app,
+ * the seed script and the migration CLI.
+ *
+ * - DATABASE_URL set (Docker / production) → PostgreSQL. The schema is
+ *   owned by migrations (src/database/migrations), applied on startup.
+ * - Otherwise (local dev) → a SQLite file, schema auto-synced from the
+ *   entities for zero setup.
  */
-export const dataSourceOptions: DataSourceOptions = {
-  type: 'better-sqlite3',
-  database: process.env.DATABASE_PATH ?? 'gym-app.sqlite',
-  entities: [
-    User,
-    Friendship,
-    Coaching,
-    Exercise,
-    Program,
-    ProgramDay,
-    ProgramExercise,
-    ProgramShare,
-    WorkoutSession,
-    SetLog,
-    SetDrop,
-    SupersetPartner,
-    TrainingBlock,
-  ],
-  // Dev only: auto-create tables from entities. Use migrations in production.
-  synchronize: true,
-};
+export const dataSourceOptions: DataSourceOptions = isPostgres
+  ? {
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      entities,
+      // .ts under ts-node (CLI), .js once compiled — never the emitted .d.ts files.
+      migrations: [`${__dirname}/migrations/*.${__filename.endsWith('.ts') ? 'ts' : 'js'}`],
+      migrationsRun: true,
+      synchronize: false,
+    }
+  : {
+      type: 'better-sqlite3',
+      database: process.env.DATABASE_PATH ?? 'gym-app.sqlite',
+      entities,
+      synchronize: process.env.DB_SYNCHRONIZE !== 'false',
+    };

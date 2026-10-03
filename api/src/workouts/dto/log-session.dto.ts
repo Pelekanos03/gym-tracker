@@ -9,10 +9,14 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { SessionStatus, SetType } from '../../common/enums';
+
+/** Longest comment on a set's video. */
+export const MAX_VIDEO_NOTE = 1000;
 
 /** One drop after the top set of a drop set. */
 export class SetDropInput {
@@ -78,6 +82,21 @@ export class SetLogInput {
   @ValidateNested({ each: true })
   @Type(() => SupersetPartnerInput)
   supersetPartners?: SupersetPartnerInput[];
+
+  /**
+   * Keeps an already-uploaded video on this set when a session is edited
+   * (editing rebuilds every set). Only honoured if the video belonged to
+   * one of the session's own sets; new videos go through the upload route.
+   */
+  @IsOptional()
+  @IsString()
+  videoFile?: string;
+
+  /** The lifter's comment on this set's video. Only kept while the set has a video. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_VIDEO_NOTE)
+  videoNote?: string;
 }
 
 export class LogSessionDto {

@@ -4,11 +4,12 @@ import { Exercise } from '../domain/exercise.entity';
 import { ProgramExercise } from '../domain/program-exercise.entity';
 import { SetLog } from '../domain/set-log.entity';
 import { SupersetPartner } from '../domain/superset-partner.entity';
+import { HiddenExercise } from '../domain/hidden-exercise.entity';
 import { ExercisesService } from './exercises.service';
 import { ExercisesController } from './exercises.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Exercise, ProgramExercise, SetLog, SupersetPartner])],
+  imports: [TypeOrmModule.forFeature([Exercise, ProgramExercise, SetLog, SupersetPartner, HiddenExercise])],
   providers: [ExercisesService],
   controllers: [ExercisesController],
   exports: [ExercisesService],

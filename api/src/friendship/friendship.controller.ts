@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/commo
 import { FriendshipService } from './friendship.service';
 import { SendRequestDto } from './dto/send-request.dto';
 import { RespondDto } from './dto/respond.dto';
-import { toPublicUser } from '../users/user.view';
+import { toOtherUser } from '../users/user.view';
 
 @Controller()
 export class FriendshipController {
@@ -35,7 +35,7 @@ export class FriendshipController {
     return links.map((l) => ({
       friendshipId: l.friendshipId,
       since: l.since,
-      friend: toPublicUser(l.friend),
+      friend: toOtherUser(l.friend),
     }));
   }
 
@@ -52,8 +52,8 @@ export class FriendshipController {
     return requests.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
-      from: toPublicUser(r.requester),
-      to: toPublicUser(r.addressee),
+      from: toOtherUser(r.requester),
+      to: toOtherUser(r.addressee),
     }));
   }
 }

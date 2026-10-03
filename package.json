@@ -12,6 +12,8 @@
     "dev:api": "npm run start:dev --workspace api",
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspaces --if-present",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "test": "npm test --workspace api",
+    "smoke": "node scripts/smoke-test.mjs"
   }
 }

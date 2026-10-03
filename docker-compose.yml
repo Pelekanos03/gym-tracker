@@ -1,0 +1,89 @@
+# Run the whole app:   cp .env.example .env   (then set the secrets in it)
+#                      docker compose up -d --build
+# Then open:           http://localhost:8080
+# Demo data (optional, once): docker compose exec api node dist/database/seed.js
+# Logs (which include IP addresses) are kept short: at most 3 × 10 MB per
+# container, oldest overwritten first — as the privacy policy says.
+x-logging: &short-logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gym
+      POSTGRES_USER: gym
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gym -d gym"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://gym:${POSTGRES_PASSWORD}@db:5432/gym
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (openssl rand -hex 32)}
+      # Session cookies are HTTPS-only in production. Set to false only
+      # while testing over plain http://localhost.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      # Public address of the app — used in password-reset email links.
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      # Closed beta: if set, sign-up requires this code. Empty = open sign-up.
+      SIGNUP_INVITE_CODE: ${SIGNUP_INVITE_CODE:-}
+      # Email for password resets. Empty = the link is written to the api log instead.
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-Training log <no-reply@localhost>}
+      # Accounts (comma-separated emails) that can read testers' feedback.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Largest set video in MB. 100 while sharing via a free Cloudflare tunnel.
+      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-500}
+      # Proxies in front of the api: 1 = nginx; 2 = Cloudflare tunnel + nginx.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+    volumes:
+      - uploads:/data            # uploaded videos, chat files, profile pictures
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *short-logs
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *short-logs
+
+  # Optional: share this machine's app on a public https://….trycloudflare.com
+  # link, no server or account needed. Start with:
+  #   docker compose --profile share up -d
+  # and find the link with:
+  #   docker compose logs tunnel | grep trycloudflare.com
+  # The link changes whenever the tunnel restarts; your PC must stay on.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://web:8080
+    depends_on:
+      - web
+    profiles: ["share"]
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  uploads:

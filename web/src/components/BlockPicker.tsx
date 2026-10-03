@@ -4,7 +4,7 @@ import type { BlockDay, Program, TrainingBlock } from '../types';
 
 /**
  * Pick the block you're running and the day to train from it. Done days
- * carry a ✅ so it's obvious where you left off, and the day picker starts
+ * are marked "done" so it's obvious where you left off, and the day picker starts
  * on the suggested next day — but any day can be picked, in any order.
  * Switching (or dropping) the block asks for confirmation first.
  */
@@ -70,7 +70,7 @@ export function BlockPicker({
   return (
     <div style={{ marginBottom: '.75rem' }}>
       {error && <div className="err">{error}</div>}
-      <div className="row" style={{ alignItems: 'flex-end' }}>
+      <div className="row block-row" style={{ alignItems: 'flex-end' }}>
         <div>
           <label>Block</label>
           <select
@@ -94,7 +94,7 @@ export function BlockPicker({
               <select value={dayId} onChange={(e) => setDayId(e.target.value)}>
                 {block.days.map((d) => (
                   <option key={d.programDayId} value={d.programDayId}>
-                    {d.status === 'DONE' ? '✅ ' : ''}Wk{d.week} · {d.name}
+                    Wk{d.week} · {d.name}{d.status === 'DONE' ? ' (done)' : ''}
                   </option>
                 ))}
               </select>

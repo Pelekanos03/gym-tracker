@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { CurrentUser } from '../auth/auth.decorators';
+import type { SessionUser } from '../auth/session';
 import { ExercisesService } from './exercises.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { MergeExercisesDto } from './dto/merge-exercises.dto';
@@ -8,14 +10,43 @@ export class ExercisesController {
   constructor(private readonly exercises: ExercisesService) {}
 
   @Get()
-  list() {
-    return this.exercises.findAll();
+  list(@Query('userId', ParseUUIDPipe) userId: string) {
+    return this.exercises.findVisibleTo(userId);
   }
 
   /** Must come before ':id' or Nest would try to route it as an exercise id. */
   @Get('merge-preview')
-  mergePreview(@Query('keepId') keepId: string, @Query('mergeId') mergeId: string) {
-    return this.exercises.mergePreview(keepId, mergeId);
+  mergePreview(
+    @Query('keepId') keepId: string,
+    @Query('mergeId') mergeId: string,
+    @Query('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.exercises.mergePreview(keepId, mergeId, userId);
+  }
+
+  /** Must also come before ':id'. */
+  @Get(':id/delete-preview')
+  deletePreview(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    return this.exercises.deletePreview(id, me.id);
+  }
+
+  /** Hide a built-in exercise from your own library. */
+  @Post(':id/hide')
+  async hide(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    await this.exercises.hide(id, me.id);
+    return { ok: true };
+  }
+
+  @Delete(':id/hide')
+  async unhide(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    await this.exercises.unhide(id, me.id);
+    return { ok: true };
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @CurrentUser() me: SessionUser) {
+    await this.exercises.deleteOwn(id, me.id);
+    return { ok: true };
   }
 
   @Get(':id')
@@ -30,6 +61,6 @@ export class ExercisesController {
 
   @Post('merge')
   merge(@Body() dto: MergeExercisesDto) {
-    return this.exercises.merge(dto.keepId, dto.mergeId);
+    return this.exercises.merge(dto.keepId, dto.mergeId, dto.userId);
   }
 }

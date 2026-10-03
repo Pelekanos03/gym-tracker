@@ -1,12 +1,20 @@
 import { Fragment, useState } from 'react';
+import { arrayMove } from '@dnd-kit/sortable';
+import { newKey } from '../keys';
+import { SortableItem, SortableList } from './Sortable';
+import { SwipeToDelete } from './SwipeToDelete';
 import { api } from '../api';
 import { useAsync } from '../hooks';
+import { ExercisePicker } from './ExercisePicker';
 import type { Exercise, Program, SetType } from '../types';
 import { SET_TYPE_LABELS } from '../types';
+import { decimalInput } from '../decimal';
 
 const SET_TYPES: SetType[] = ['WORKING', 'WARMUP', 'DROP_SET', 'SUPERSET', 'BACKOFF', 'AMRAP'];
 
 interface Line {
+  /** Stable key for drag-and-drop. */
+  id: string;
   exerciseId: string;
   targetSets: number;
   targetReps: number;
@@ -16,15 +24,18 @@ interface Line {
   notes: string;
 }
 
-const emptyLine: Line = {
-  exerciseId: '',
-  targetSets: 3,
-  targetReps: 5,
-  targetRpe: '',
-  targetWeight: '',
-  setType: 'WORKING',
-  notes: '',
-};
+function emptyLine(): Line {
+  return {
+    id: newKey(),
+    exerciseId: '',
+    targetSets: 3,
+    targetReps: 5,
+    targetRpe: '',
+    targetWeight: '',
+    setType: 'WORKING',
+    notes: '',
+  };
+}
 
 /** One back-off row in the helper: example values the user can edit, and untick to leave out. */
 interface BackoffRow {
@@ -80,7 +91,7 @@ function linesFromBackoffPlan(base: Line, plan: BackoffPlan): Line[] {
     .filter((r) => r.use && r.reps)
     .map(
       (r): Line => ({
-        ...emptyLine,
+        ...emptyLine(),
         exerciseId: base.exerciseId,
         targetSets: 1,
         targetReps: Number(r.reps),
@@ -92,6 +103,7 @@ function linesFromBackoffPlan(base: Line, plan: BackoffPlan): Line[] {
 }
 
 interface DayForm {
+  id: string;
   weekNumber: number;
   dayNumber: number;
   name: string;
@@ -100,21 +112,24 @@ interface DayForm {
 
 function newDay(weekNumber: number, dayNumber: number): DayForm {
   return {
+    id: newKey(),
     weekNumber,
     dayNumber,
     name: `Day ${dayNumber}`,
-    lines: [{ ...emptyLine }],
+    lines: [emptyLine()],
   };
 }
 
 function daysFromProgram(program: Program): DayForm[] {
   return program.days.map((d) => ({
+    id: newKey(),
     weekNumber: d.weekNumber,
     dayNumber: d.dayNumber,
     name: d.name,
     lines: [...d.exercises]
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((pe) => ({
+        id: newKey(),
         exerciseId: pe.exercise.id,
         targetSets: pe.targetSets,
         targetReps: pe.targetReps,
@@ -144,7 +159,7 @@ export function ProgramBuilder({
   onCreated: () => void;
   onCancel?: () => void;
 }) {
-  const exercises = useAsync(() => api.listExercises(), []);
+  const exercises = useAsync(() => api.listExercises(ownerId), [ownerId]);
   const [name, setName] = useState(existing?.name ?? '');
   const [lengthWeeks, setLengthWeeks] = useState(existing?.lengthWeeks ?? 4);
   const [days, setDays] = useState<DayForm[]>(
@@ -195,6 +210,26 @@ export function ProgramBuilder({
     );
   }
 
+  /** Drag-and-drop within a day. */
+  function moveLine(di: number, from: string, to: string) {
+    const lines = days[di].lines;
+    const i = lines.findIndex((l) => l.id === from);
+    const j = lines.findIndex((l) => l.id === to);
+    if (i >= 0 && j >= 0) updateDay(di, { lines: arrayMove(lines, i, j) });
+  }
+
+  function removeLine(di: number, li: number) {
+    setPlanning(undefined);
+    const lines = days[di].lines;
+    // A day keeps at least one (empty) line to type into.
+    updateDay(di, { lines: lines.length === 1 ? [emptyLine()] : lines.filter((_, idx) => idx !== li) });
+  }
+
+  function removeDay(di: number) {
+    setPlanning(undefined);
+    setDays((ds) => (ds.length === 1 ? [newDay(1, 1)] : ds.filter((_, idx) => idx !== di)));
+  }
+
   function addDay() {
     const last = days[days.length - 1];
     setDays((ds) => [...ds, newDay(last?.weekNumber ?? 1, (last?.dayNumber ?? 0) + 1)]);
@@ -211,7 +246,12 @@ export function ProgramBuilder({
     const nextWeek = lastWeek + 1;
     const copies = days
       .filter((d) => d.weekNumber === lastWeek)
-      .map((d) => ({ ...d, weekNumber: nextWeek, lines: d.lines.map((l) => ({ ...l })) }));
+      .map((d) => ({
+        ...d,
+        id: newKey(),
+        weekNumber: nextWeek,
+        lines: d.lines.map((l) => ({ ...l, id: newKey() })),
+      }));
     setDays((ds) => [...ds, ...copies]);
     setLengthWeeks((w) => Math.max(w, nextWeek));
   }
@@ -239,6 +279,17 @@ export function ProgramBuilder({
       }))
       .filter((d) => d.exercises.length > 0);
 
+    // An emptied box reads as 0 while typing; it has to be filled in before saving.
+    const blank = days.some(
+      (d) =>
+        !d.weekNumber ||
+        !d.dayNumber ||
+        d.lines.some((l) => l.exerciseId && (!l.targetSets || !l.targetReps)),
+    );
+    if (blank || !lengthWeeks) {
+      setError('Fill in every Week, Day #, Length, Sets and Reps box (at least 1).');
+      return;
+    }
     if (!name || dayPayloads.length === 0) {
       setError('Give the program a name and at least one day with an exercise.');
       return;
@@ -276,7 +327,7 @@ export function ProgramBuilder({
             type="number"
             min={1}
             max={52}
-            value={lengthWeeks}
+            value={lengthWeeks || ''}
             onChange={(e) => setLengthWeeks(Number(e.target.value))}
             style={{ width: 80 }}
           />
@@ -284,219 +335,194 @@ export function ProgramBuilder({
       </div>
 
       {days.map((day, di) => (
-        <Fragment key={di}>
-        {/* A labelled line wherever a new week starts, so weeks don't blur together. */}
-        {(di === 0 || days[di - 1].weekNumber !== day.weekNumber) && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '.6rem',
-              marginTop: di === 0 ? '1rem' : '1.75rem',
-            }}
-          >
-            <strong style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>
-              Week {day.weekNumber}
-            </strong>
-            <div style={{ flex: 1, borderTop: '2px solid var(--accent)' }} />
-          </div>
-        )}
-        <div
-          className="panel"
-          style={{ background: 'var(--panel-2)', marginTop: '1rem', marginBottom: 0 }}
-        >
-          <div className="row" style={{ alignItems: 'flex-end' }}>
-            <div style={{ maxWidth: 80 }}>
-              <label>Week</label>
-              <input
-                type="number"
-                min={1}
-                value={day.weekNumber}
-                onChange={(e) => updateDay(di, { weekNumber: Number(e.target.value) })}
-              />
+        <Fragment key={day.id}>
+          {/* A labelled line wherever a new week starts, so weeks don't blur together. */}
+          {(di === 0 || days[di - 1].weekNumber !== day.weekNumber) && (
+            <div className="week-divider" style={{ marginTop: di === 0 ? '1rem' : '1.75rem' }}>
+              <strong>Week {day.weekNumber}</strong>
+              <div />
             </div>
-            <div style={{ maxWidth: 80 }}>
-              <label>Day #</label>
-              <input
-                type="number"
-                min={1}
-                value={day.dayNumber}
-                onChange={(e) => updateDay(di, { dayNumber: Number(e.target.value) })}
-              />
-            </div>
-            <div style={{ flex: 2 }}>
-              <label>Day label</label>
-              <input
-                value={day.name}
-                onChange={(e) => updateDay(di, { name: e.target.value })}
-              />
-            </div>
-            <div style={{ flex: '0 0 auto' }}>
-              <button
-                type="button"
-                className="ghost small"
-                onClick={() => setDays((ds) => ds.filter((_, idx) => idx !== di))}
-                disabled={days.length === 1}
-              >
-                Remove day
-              </button>
-            </div>
-          </div>
+          )}
+          <div className="panel day-box">
+            <SwipeToDelete onDelete={() => removeDay(di)} label="Remove">
+              <div className="day-head">
+                <div className="day-num">
+                  <label>Week</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={day.weekNumber || ''}
+                    onChange={(e) => updateDay(di, { weekNumber: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="day-num">
+                  <label>Day #</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={day.dayNumber || ''}
+                    onChange={(e) => updateDay(di, { dayNumber: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="day-name">
+                  <label>Day label</label>
+                  <input value={day.name} onChange={(e) => updateDay(di, { name: e.target.value })} />
+                </div>
+                <button
+                  type="button"
+                  className="ghost small desktop-only"
+                  onClick={() => removeDay(di)}
+                  disabled={days.length === 1}
+                >
+                  Remove day
+                </button>
+              </div>
+            </SwipeToDelete>
 
-          <div className="table-scroll" style={{ marginTop: '.5rem' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Exercise</th>
-                <th>Sets</th>
-                <th>Reps</th>
-                <th>RPE</th>
-                <th>Weight (kg)</th>
-                <th>Set type</th>
-                <th>Notes</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {day.lines.map((l, li) => (
-                <Fragment key={li}>
-                <tr>
-                  <td>
-                    <select
-                      value={l.exerciseId}
-                      onChange={(e) => updateLine(di, li, { exerciseId: e.target.value })}
-                    >
-                      <option value="">— pick —</option>
-                      {(exercises.data ?? []).map((ex) => (
-                        <option key={ex.id} value={ex.id}>
-                          {ex.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={1}
-                      value={l.targetSets}
-                      onChange={(e) =>
-                        updateLine(di, li, { targetSets: Number(e.target.value) })
-                      }
-                      style={{ width: 56 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={1}
-                      value={l.targetReps}
-                      onChange={(e) =>
-                        updateLine(di, li, { targetReps: Number(e.target.value) })
-                      }
-                      style={{ width: 56 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      step={0.5}
-                      value={l.targetRpe}
-                      onChange={(e) => updateLine(di, li, { targetRpe: e.target.value })}
-                      style={{ width: 56 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={l.targetWeight}
-                      onChange={(e) => updateLine(di, li, { targetWeight: e.target.value })}
-                      placeholder="optional"
-                      style={{ width: 72 }}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={l.setType}
-                      onChange={(e) => updateLine(di, li, { setType: e.target.value as SetType })}
-                      style={{ minWidth: 100 }}
-                    >
-                      {SET_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {SET_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      value={l.notes}
-                      onChange={(e) => updateLine(di, li, { notes: e.target.value })}
-                    />
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    {l.setType !== 'BACKOFF' &&
-                      isCompound(exercises.data?.find((ex) => ex.id === l.exerciseId)) && (
-                        <>
-                          <button
-                            type="button"
-                            className="ghost small"
-                            title="Turn this line into a top set followed by lighter back-off sets"
-                            onClick={() => openBackoffPlanner(di, li)}
-                          >
-                            Top set + back-offs
-                          </button>{' '}
-                        </>
-                      )}
-                    <button
-                      type="button"
-                      className="ghost small"
-                      onClick={() => {
-                        setPlanning(undefined);
-                        updateDay(di, {
-                          lines: day.lines.filter((_, idx) => idx !== li),
-                        });
-                      }}
-                      disabled={day.lines.length === 1}
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-                {planning?.di === di && planning.li === li && (
-                  <tr>
-                    <td colSpan={8}>
-                      <BackoffPlanner
-                        plan={planning.plan}
-                        onChange={(plan) => setPlanning({ ...planning, plan })}
-                        onApply={applyBackoffPlan}
-                        onCancel={() => setPlanning(undefined)}
-                      />
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-          </div>
+            {/* Grid rows, not a table: on a phone each line becomes a small card. */}
+            <div className="line-grid">
+              <div className="line-grid-head">
+                <span />
+                <span>Exercise</span>
+                <span>Sets</span>
+                <span>Reps</span>
+                <span>RPE</span>
+                <span>Weight (kg)</span>
+                <span>Set type</span>
+                <span>Notes</span>
+                <span />
+              </div>
+              <SortableList ids={day.lines.map((l) => l.id)} onMove={(from, to) => moveLine(di, from, to)}>
+                {day.lines.map((l, li) => (
+                  <SortableItem key={l.id} id={l.id}>
+                    {(handle) => (
+                      <>
+                        <SwipeToDelete onDelete={() => removeLine(di, li)}>
+                          <div className="line-row">
+                            {handle}
+                            <div className="line-exercise">
+                              <ExercisePicker
+                                exercises={exercises.data ?? []}
+                                value={l.exerciseId}
+                                onChange={(id) => updateLine(di, li, { exerciseId: id })}
+                              />
+                            </div>
+                            <div className="line-field">
+                              <label className="line-label">Sets</label>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                value={l.targetSets || ''}
+                                onChange={(e) => updateLine(di, li, { targetSets: Number(e.target.value) })}
+                              />
+                            </div>
+                            <div className="line-field">
+                              <label className="line-label">Reps</label>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                value={l.targetReps || ''}
+                                onChange={(e) => updateLine(di, li, { targetReps: Number(e.target.value) })}
+                              />
+                            </div>
+                            <div className="line-field">
+                              <label className="line-label">RPE</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                min={1}
+                                max={10}
+                                step={0.5}
+                                value={l.targetRpe}
+                                onChange={(e) => updateLine(di, li, { targetRpe: decimalInput(e.target.value) })}
+                              />
+                            </div>
+                            <div className="line-field">
+                              <label className="line-label">kg</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                min={0}
+                                step={0.5}
+                                value={l.targetWeight}
+                                onChange={(e) => updateLine(di, li, { targetWeight: decimalInput(e.target.value) })}
+                                placeholder="—"
+                              />
+                            </div>
+                            <select
+                              className="line-type"
+                              value={l.setType}
+                              onChange={(e) => updateLine(di, li, { setType: e.target.value as SetType })}
+                              aria-label="Set type"
+                            >
+                              {SET_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {SET_TYPE_LABELS[t]}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              className="line-notes"
+                              value={l.notes}
+                              onChange={(e) => updateLine(di, li, { notes: e.target.value })}
+                              placeholder="Notes"
+                              aria-label="Notes"
+                            />
+                            <div className="line-actions">
+                              {l.setType !== 'BACKOFF' &&
+                                isCompound(exercises.data?.find((ex) => ex.id === l.exerciseId)) && (
+                                  <button
+                                    type="button"
+                                    className="ghost small"
+                                    title="Turn this line into a top set followed by lighter back-off sets"
+                                    onClick={() => openBackoffPlanner(di, li)}
+                                  >
+                                    Top set + back-offs
+                                  </button>
+                                )}
+                              <button
+                                type="button"
+                                className="ghost small desktop-only"
+                                title="Remove this exercise"
+                                onClick={() => removeLine(di, li)}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        </SwipeToDelete>
+                        {planning?.di === di && planning.li === li && (
+                          <BackoffPlanner
+                            plan={planning.plan}
+                            onChange={(plan) => setPlanning({ ...planning, plan })}
+                            onApply={applyBackoffPlan}
+                            onCancel={() => setPlanning(undefined)}
+                          />
+                        )}
+                      </>
+                    )}
+                  </SortableItem>
+                ))}
+              </SortableList>
+            </div>
 
-          <button
-            type="button"
-            className="ghost small"
-            style={{ marginTop: '.5rem' }}
-            onClick={() => updateDay(di, { lines: [...day.lines, { ...emptyLine }] })}
-          >
-            + Add exercise
-          </button>
-        </div>
+            <button
+              type="button"
+              className="ghost small"
+              style={{ marginTop: '.5rem' }}
+              onClick={() => updateDay(di, { lines: [...day.lines, emptyLine()] })}
+            >
+              + Add exercise
+            </button>
+          </div>
         </Fragment>
       ))}
 
-      <div className="row" style={{ marginTop: '1rem' }}>
+      <div className="row stack-on-phone" style={{ marginTop: '1rem' }}>
         <button type="button" className="ghost" onClick={addDay}>
           + Add day
         </button>

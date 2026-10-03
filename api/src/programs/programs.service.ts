@@ -90,8 +90,11 @@ export class ProgramsService {
    * what let a paid coaching program get copied for free by anyone. Friends
    * use share() instead, which never hands over an owned copy.
    */
-  async copy(programId: string, dto: CopyProgramDto): Promise<Program> {
+  async copy(programId: string, dto: CopyProgramDto, actorId: string): Promise<Program> {
     const source = await this.findById(programId);
+    if (source.owner.id !== actorId) {
+      throw new ForbiddenException('Only the owner can send a copy of this program');
+    }
     const toUser = await this.users.findById(dto.toUserId);
     if (source.owner.id !== toUser.id) {
       await this.coaching.assertCoach(source.owner.id, toUser.id);

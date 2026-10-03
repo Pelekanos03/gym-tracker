@@ -27,3 +27,16 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
 
   return { data, error, loading, reload };
 }
+
+/** True while the page is at phone width — the same breakpoint as the CSS (700px). */
+export function useIsPhone(): boolean {
+  const query = '(max-width: 700px)';
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return matches;
+}
